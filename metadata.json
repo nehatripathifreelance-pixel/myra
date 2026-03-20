@@ -1,0 +1,7 @@
+{
+  "name": "Remix: HostelHub Pro",
+  "description": "Comprehensive hostel management software featuring resident tracking, room allocation, QR-based attendance, visitor logs, and accounting.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
