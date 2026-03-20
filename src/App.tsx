@@ -39,14 +39,17 @@ import {
   Package,
   Calendar,
   Share2,
-  Layout,
+  Layout as LayoutIcon,
   Shield,
-  Image
+  Image as ImageIcon,
+  Percent,
+  Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from './supabase';
 
 import { utils, writeFile } from 'xlsx';
+import { QRCodeSVG } from 'qrcode.react';
 
 // --- Types ---
 interface Resident {
@@ -472,14 +475,14 @@ const SettingsPage = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Branding & Info */}
         <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-zinc-100 space-y-6">
-          <h3 className="text-xl font-bold flex items-center gap-2"><Layout size={20} /> Branding & Contact</h3>
+          <h3 className="text-xl font-bold flex items-center gap-2"><LayoutIcon size={20} /> Branding & Contact</h3>
           <form onSubmit={handleSave} className="space-y-6">
             <div className="flex items-center gap-6">
               <div className="w-24 h-24 bg-zinc-50 rounded-3xl border-2 border-dashed border-zinc-200 flex items-center justify-center overflow-hidden relative group">
                 {logo ? (
                   <img src={logo} alt="Logo" className="w-full h-full object-contain" />
                 ) : (
-                  <Image size={24} className="text-zinc-300" />
+                  <ImageIcon size={24} className="text-zinc-300" />
                 )}
                 <input type="file" accept="image/*" onChange={handleLogoUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
               </div>
@@ -837,29 +840,6 @@ const Dashboard = () => {
   return (
     <div className="space-y-8">
       <MessageModal {...messageModal} onClose={() => setMessageModal(prev => ({ ...prev, isOpen: false }))} />
-      {hasHostels === false && (
-        <motion.div 
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="p-8 bg-emerald-500 rounded-[2.5rem] text-zinc-900 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl shadow-emerald-500/20"
-        >
-          <div className="flex items-center gap-6">
-            <div className="w-16 h-16 bg-white/20 rounded-3xl flex items-center justify-center">
-              <Database size={32} />
-            </div>
-            <div>
-              <h2 className="text-2xl font-black">Initialize Your System</h2>
-              <p className="font-medium opacity-80">Populate your hostel management system with the sample data from the preview.</p>
-            </div>
-          </div>
-          <button 
-            onClick={seedData}
-            className="px-8 py-4 bg-zinc-900 text-white rounded-2xl font-bold hover:bg-zinc-800 transition-all shadow-lg whitespace-nowrap"
-          >
-            Add The Data Now
-          </button>
-        </motion.div>
-      )}
       <header className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3">
@@ -881,16 +861,7 @@ const Dashboard = () => {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-4">
-            <p className="text-zinc-500">Welcome back, here's what's happening today.</p>
-            <button 
-              onClick={seedData}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-xl text-xs font-bold hover:bg-emerald-200 transition-all uppercase tracking-wider shadow-sm"
-            >
-              <Database size={14} />
-              Seed Sample Data
-            </button>
-          </div>
+          <p className="text-zinc-500">Welcome back, here's what's happening today.</p>
         </div>
         <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-2xl border border-zinc-100 shadow-sm">
           <Utensils size={18} className="text-emerald-500" />
@@ -3018,8 +2989,6 @@ const AddResident = () => {
     </div>
   );
 };
-
-import { QRCodeSVG } from 'qrcode.react';
 
 // --- Components ---
 
