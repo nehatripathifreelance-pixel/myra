@@ -294,10 +294,15 @@ const Sidebar = ({ isOpen, setIsOpen, onLogout, role, wardenName }: { isOpen: bo
   return (
     <>
       <div className={`fixed inset-0 bg-black/50 z-40 lg:hidden transition-opacity print:hidden ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsOpen(false)} />
-      <aside className={`fixed top-0 left-0 h-full bg-zinc-900 text-zinc-400 w-64 z-50 transform transition-transform duration-300 lg:translate-x-0 print:hidden flex flex-col ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="p-6 flex items-center gap-3 border-b border-zinc-800 shrink-0">
-          <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center text-zinc-900 font-bold">H</div>
-          <span className="text-white font-bold text-xl tracking-tight">HostelHub Pro</span>
+      <aside className={`fixed top-0 left-0 h-full bg-zinc-900 text-zinc-400 w-72 lg:w-64 z-50 transform transition-transform duration-300 lg:translate-x-0 print:hidden flex flex-col ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-6 flex items-center justify-between border-b border-zinc-800 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center text-zinc-900 font-bold">H</div>
+            <span className="text-white font-bold text-xl tracking-tight">HostelHub Pro</span>
+          </div>
+          <button onClick={() => setIsOpen(false)} className="lg:hidden p-2 hover:bg-zinc-800 rounded-lg transition-colors">
+            <X size={20} />
+          </button>
         </div>
         
         <div className="p-4 border-b border-zinc-800 shrink-0">
@@ -840,30 +845,30 @@ const Dashboard = () => {
   return (
     <div className="space-y-8">
       <MessageModal {...messageModal} onClose={() => setMessageModal(prev => ({ ...prev, isOpen: false }))} />
-      <header className="flex items-center justify-between">
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold text-zinc-900">Dashboard</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900">Dashboard</h1>
             {connectionStatus === 'connected' ? (
               <span className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-black uppercase tracking-wider">
                 <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                Live Connection
+                Live
               </span>
             ) : connectionStatus === 'error' ? (
               <span className="flex items-center gap-1.5 px-2.5 py-1 bg-red-100 text-red-700 rounded-full text-[10px] font-black uppercase tracking-wider">
                 <div className="w-1.5 h-1.5 bg-red-500 rounded-full" />
-                Connection Error
+                Error
               </span>
             ) : (
               <span className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-100 text-zinc-500 rounded-full text-[10px] font-black uppercase tracking-wider">
                 <div className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-pulse" />
-                Connecting...
+                ...
               </span>
             )}
           </div>
-          <p className="text-zinc-500">Welcome back, here's what's happening today.</p>
+          <p className="text-zinc-500 text-sm sm:text-base">Welcome back, here's what's happening today.</p>
         </div>
-        <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-2xl border border-zinc-100 shadow-sm">
+        <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-2xl border border-zinc-100 shadow-sm self-start sm:self-auto">
           <Utensils size={18} className="text-emerald-500" />
           <span className="text-sm font-bold text-zinc-900">Mess: Breakfast Served</span>
         </div>
@@ -1251,27 +1256,27 @@ const ResidentList = () => {
         )}
       </AnimatePresence>
 
-      <header className="flex items-center justify-between">
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-zinc-900">Residents</h1>
-          <p className="text-zinc-500">Manage and view all hostel occupants.</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900">Residents</h1>
+          <p className="text-zinc-500 text-sm sm:text-base">Manage and view all hostel occupants.</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-2 sm:gap-3">
           <button 
             onClick={() => window.print()}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-zinc-200 text-zinc-900 rounded-xl font-bold hover:bg-zinc-50 transition-all"
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-white border border-zinc-200 text-zinc-900 rounded-xl font-bold hover:bg-zinc-50 transition-all text-sm"
           >
-            <FileText size={18} /> Print
+            <FileText size={16} /> Print
           </button>
           <button 
             onClick={exportToExcel}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-zinc-200 text-zinc-900 rounded-xl font-bold hover:bg-zinc-50 transition-all"
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-white border border-zinc-200 text-zinc-900 rounded-xl font-bold hover:bg-zinc-50 transition-all text-sm"
           >
-            <Database size={18} /> Export Excel
+            <Database size={16} /> Export
           </button>
-          <Link to="/add-resident" className="flex items-center gap-2 px-6 py-3 bg-emerald-500 text-zinc-900 rounded-xl font-bold hover:bg-emerald-400 transition-all">
-            <UserPlus size={20} />
-            New Admission
+          <Link to="/add-resident" className="flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-3 bg-emerald-500 text-zinc-900 rounded-xl font-bold hover:bg-emerald-400 transition-all text-sm">
+            <UserPlus size={18} />
+            Add
           </Link>
         </div>
       </header>
@@ -2505,9 +2510,19 @@ const Accounting = () => {
 
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-3xl font-bold text-zinc-900">Accounting</h1>
-        <p className="text-zinc-500">Track payments, fees, and financial reports.</p>
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900">Accounting</h1>
+          <p className="text-zinc-500 text-sm sm:text-base">Track payments, fees, and financial reports.</p>
+        </div>
+        <div className="flex gap-2 sm:gap-3">
+          <button 
+            onClick={() => setShowCollectModal(true)}
+            className="flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-3 bg-emerald-500 text-zinc-900 rounded-xl font-bold hover:bg-emerald-400 transition-all text-sm"
+          >
+            <Plus size={18} /> Collect Payment
+          </button>
+        </div>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -2554,18 +2569,18 @@ const Accounting = () => {
           {transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(tx => {
             const resident = residents.find(r => r.id === tx.residentId);
             return (
-              <div key={tx.id} className="p-4 flex items-center justify-between border-b border-zinc-50 last:border-0">
+              <div key={tx.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-50 last:border-0">
                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center">
+                  <div className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center shrink-0">
                     <CreditCard size={20} />
                   </div>
                   <div>
-                    <p className="font-bold text-zinc-900">{tx.type.toUpperCase()} - {resident?.fullName || 'Unknown'}</p>
+                    <p className="font-bold text-zinc-900 truncate max-w-[200px] sm:max-w-none">{tx.type.toUpperCase()} - {resident?.fullName || 'Unknown'}</p>
                     <p className="text-zinc-500 text-xs">Receipt #{tx.receiptNumber} • {tx.date ? new Date(tx.date).toLocaleDateString() : 'N/A'}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-6">
-                  <div className="text-right">
+                <div className="flex items-center justify-between sm:justify-end gap-6">
+                  <div className="text-left sm:text-right">
                     <p className="font-bold text-zinc-900">₹{tx.amount.toLocaleString()}</p>
                     <p className="text-emerald-500 text-xs font-bold capitalize">Paid via {tx.method}</p>
                   </div>
@@ -3136,12 +3151,20 @@ const Attendance = () => {
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
-      <header>
-        <h1 className="text-3xl font-bold text-zinc-900">Attendance System</h1>
-        <p className="text-zinc-500">Scan QR code to mark check-in or check-out.</p>
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900">Attendance System</h1>
+          <p className="text-zinc-500 text-sm sm:text-base">Scan QR code to mark check-in or check-out.</p>
+        </div>
+        <button 
+          onClick={() => setShowManualModal(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-zinc-200 text-zinc-900 rounded-xl font-bold hover:bg-zinc-50 transition-all text-sm self-start sm:self-auto"
+        >
+          <Edit size={16} /> Manual Entry
+        </button>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
         <div className="md:col-span-2 bg-zinc-900 rounded-[2rem] aspect-video flex flex-col items-center justify-center text-zinc-500 border-4 border-zinc-800 overflow-hidden relative">
           {scanning ? (
             <div id="reader" className="w-full h-full" />
@@ -3608,58 +3631,60 @@ const Infrastructure = () => {
 
   return (
     <div className="space-y-8">
-      <header className="flex items-center justify-between">
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-zinc-900">Infrastructure</h1>
-          <p className="text-zinc-500">Manage hostels, categories, and rooms.</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900">Infrastructure</h1>
+          <p className="text-zinc-500 text-sm sm:text-base">Manage hostels, categories, and rooms.</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-2 sm:gap-3">
           <button 
             onClick={() => setShowAddCategory(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-zinc-200 text-zinc-900 rounded-xl font-bold hover:bg-zinc-50 transition-all"
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-white border border-zinc-200 text-zinc-900 rounded-xl font-bold hover:bg-zinc-50 transition-all text-sm"
           >
-            <Settings size={18} />
+            <Settings size={16} />
             Categories
           </button>
           <button 
             onClick={() => setShowAddHostel(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-zinc-900 text-white rounded-xl font-bold hover:bg-zinc-800 transition-all"
+            className="flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-3 bg-zinc-900 text-white rounded-xl font-bold hover:bg-zinc-800 transition-all text-sm"
           >
-            <Plus size={20} />
+            <Plus size={18} />
             Add Hostel
           </button>
         </div>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:gap-8">
         {/* Hostels List */}
         <div className="lg:col-span-1 space-y-4">
-          <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-widest px-2">Hostels</h3>
-          {hostels.map((h) => (
-              <div 
-                key={h.id} 
-                onClick={() => setSelectedHostel(h)}
-                className={`p-6 rounded-3xl border group transition-all cursor-pointer ${selectedHostel?.id === h.id ? 'bg-white border-emerald-500 shadow-md' : 'bg-zinc-50 border-zinc-100 hover:bg-white'}`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-bold text-zinc-900">{h.name}</h3>
-                  <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={(e) => { e.stopPropagation(); setEditingHostel(h); setShowAddHostel(true); }} className="p-1 text-zinc-400 hover:text-emerald-500"><Edit size={14} /></button>
-                    <button onClick={(e) => { 
-                      e.stopPropagation(); 
-                      showConfirm(
-                        'Delete Hostel',
-                        `Are you sure you want to delete ${h.name}? This will delete all blocks, rooms, and beds in this hostel.`,
-                        () => deleteHostel(h.id)
-                      );
-                    }} className="p-1 text-zinc-400 hover:text-rose-500"><Trash2 size={14} /></button>
+          <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest px-2">Hostels</h3>
+          <div className="flex lg:flex-col gap-4 overflow-x-auto lg:overflow-x-visible pb-4 lg:pb-0 px-2 lg:px-0 scrollbar-hide">
+            {hostels.map((h) => (
+                <div 
+                  key={h.id} 
+                  onClick={() => setSelectedHostel(h)}
+                  className={`p-4 sm:p-6 rounded-3xl border group transition-all cursor-pointer shrink-0 w-64 lg:w-full ${selectedHostel?.id === h.id ? 'bg-white border-emerald-500 shadow-md' : 'bg-zinc-50 border-zinc-100 hover:bg-white'}`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-bold text-zinc-900 truncate">{h.name}</h3>
+                    <div className="flex gap-2 lg:opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={(e) => { e.stopPropagation(); setEditingHostel(h); setShowAddHostel(true); }} className="p-1 text-zinc-400 hover:text-emerald-500"><Edit size={14} /></button>
+                      <button onClick={(e) => { 
+                        e.stopPropagation(); 
+                        showConfirm(
+                          'Delete Hostel',
+                          `Are you sure you want to delete ${h.name}? This will delete all blocks, rooms, and beds in this hostel.`,
+                          () => deleteHostel(h.id)
+                        );
+                      }} className="p-1 text-zinc-400 hover:text-rose-500"><Trash2 size={14} /></button>
+                    </div>
                   </div>
+                  <p className="text-zinc-500 text-xs sm:text-sm">
+                    {blocks.filter(b => b.hostelId === h.id).length} Blocks • {rooms.filter(r => blocks.find(b => b.id === r.blockId && b.hostelId === h.id)).length} Rooms
+                  </p>
                 </div>
-                <p className="text-zinc-500 text-sm">
-                  {blocks.filter(b => b.hostelId === h.id).length} Blocks • {rooms.filter(r => blocks.find(b => b.id === r.blockId && b.hostelId === h.id)).length} Rooms
-                </p>
-              </div>
-          ))}
+            ))}
+          </div>
         </div>
 
         {/* Main View */}
@@ -3667,16 +3692,16 @@ const Infrastructure = () => {
           {selectedHostel ? (
             <>
               {/* Blocks Tabs */}
-              <div className="flex items-center justify-between">
-                <div className="flex gap-2 overflow-x-auto pb-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                   {currentBlocks.map(b => (
                     <button
                       key={b.id}
                       onClick={() => setSelectedBlock(b)}
-                      className={`group relative px-6 py-2 rounded-xl font-bold whitespace-nowrap transition-all ${selectedBlock?.id === b.id ? 'bg-zinc-900 text-white' : 'bg-white border border-zinc-200 text-zinc-500 hover:border-zinc-300'}`}
+                      className={`group relative px-4 sm:px-6 py-2 rounded-xl font-bold whitespace-nowrap transition-all text-sm ${selectedBlock?.id === b.id ? 'bg-zinc-900 text-white' : 'bg-white border border-zinc-200 text-zinc-500 hover:border-zinc-300'}`}
                     >
                       {b.name}
-                      <div className="absolute -top-2 -right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="absolute -top-2 -right-2 flex gap-1 lg:opacity-0 group-hover:opacity-100 transition-opacity">
                         <div onClick={(e) => { e.stopPropagation(); setEditingBlock(b); setShowAddBlock(true); }} className="p-1 bg-white border border-zinc-200 rounded-full text-zinc-400 hover:text-emerald-500 shadow-sm"><Edit size={10} /></div>
                         <div onClick={(e) => { 
                           e.stopPropagation(); 
@@ -3699,7 +3724,7 @@ const Infrastructure = () => {
                 {selectedBlock && (
                   <button 
                     onClick={() => setShowAddRoom(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-zinc-900 rounded-xl font-bold hover:bg-emerald-400 transition-all"
+                    className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-zinc-900 rounded-xl font-bold hover:bg-emerald-400 transition-all text-sm self-start sm:self-auto"
                   >
                     <Plus size={18} /> Add Room
                   </button>
@@ -3710,23 +3735,23 @@ const Infrastructure = () => {
               <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-zinc-100 min-h-[400px]">
                 {selectedBlock ? (
                   <>
-                    <div className="flex items-center justify-between mb-8">
-                      <h3 className="text-xl font-bold">{selectedBlock.name} - Rooms</h3>
-                      <div className="flex flex-wrap gap-4">
-                        <div className="flex items-center gap-2 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                          <div className="w-3 h-3 bg-emerald-500 rounded-full" /> Vacant
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+                      <h3 className="text-lg sm:text-xl font-bold">{selectedBlock.name} - Rooms</h3>
+                      <div className="flex flex-wrap gap-2 sm:gap-4">
+                        <div className="flex items-center gap-2 text-[8px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                          <div className="w-2 h-2 sm:w-3 sm:h-3 bg-emerald-500 rounded-full" /> Vacant
                         </div>
-                        <div className="flex items-center gap-2 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                          <div className="w-3 h-3 bg-indigo-500 rounded-full" /> Partially Sold
+                        <div className="flex items-center gap-2 text-[8px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                          <div className="w-2 h-2 sm:w-3 sm:h-3 bg-indigo-500 rounded-full" /> Partial
                         </div>
-                        <div className="flex items-center gap-2 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                          <div className="w-3 h-3 bg-rose-500 rounded-full" /> Sold Out
+                        <div className="flex items-center gap-2 text-[8px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                          <div className="w-2 h-2 sm:w-3 sm:h-3 bg-rose-500 rounded-full" /> Full
                         </div>
-                        <div className="flex items-center gap-2 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                          <div className="w-3 h-3 bg-rose-300 rounded-full" /> Resident Out
+                        <div className="flex items-center gap-2 text-[8px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                          <div className="w-2 h-2 sm:w-3 sm:h-3 bg-rose-300 rounded-full" /> Out
                         </div>
-                        <div className="flex items-center gap-2 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                          <div className="w-3 h-3 bg-amber-500 rounded-full" /> Repair
+                        <div className="flex items-center gap-2 text-[8px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                          <div className="w-2 h-2 sm:w-3 sm:h-3 bg-amber-500 rounded-full" /> Repair
                         </div>
                       </div>
                           <div className="space-y-12">
@@ -4452,13 +4477,16 @@ export default function App() {
           wardenName={wardenData?.name}
         />
         
-        <main className="flex-1 lg:ml-64 p-6 lg:p-10">
+        <main className="flex-1 lg:ml-64 p-4 sm:p-6 lg:p-10 overflow-x-hidden">
           <div className="max-w-7xl mx-auto">
             <div className="lg:hidden mb-6 flex items-center justify-between print:hidden">
-              <button onClick={() => setSidebarOpen(true)} className="p-2 bg-white rounded-xl shadow-sm border border-zinc-100">
+              <button onClick={() => setSidebarOpen(true)} className="p-2 bg-white rounded-xl shadow-sm border border-zinc-100 text-zinc-900">
                 <Menu size={24} />
               </button>
-              <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center font-bold">H</div>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center font-bold text-zinc-900 text-sm">H</div>
+                <span className="font-bold text-zinc-900 tracking-tight">HostelHub Pro</span>
+              </div>
             </div>
 
             <Routes>
