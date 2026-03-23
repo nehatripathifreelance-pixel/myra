@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation, useSearchParams, Navigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Link, useNavigate, useLocation, useSearchParams, Navigate } from 'react-router-dom';
 import { Html5QrcodeScanner, Html5Qrcode } from 'html5-qrcode';
 import { 
   LayoutDashboard, 
@@ -47,10 +47,10 @@ import {
   Percent,
   Lock
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from './supabase';
 
-import { utils, writeFile } from 'xlsx';
+import * as XLSX from 'xlsx';
 import { QRCodeSVG } from 'qrcode.react';
 
 // --- Types ---
@@ -1146,10 +1146,10 @@ const ResidentList = () => {
       'Monthly Rent': r.monthlyRent || 0
     }));
 
-    const ws = utils.json_to_sheet(data);
-    const wb = utils.book_new();
-    utils.book_append_sheet(wb, ws, 'Residents');
-    writeFile(wb, 'Hostel_Residents.xlsx');
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Residents');
+    XLSX.writeFile(wb, 'Hostel_Residents.xlsx');
   };
 
   return (
@@ -1321,10 +1321,10 @@ const ResidentList = () => {
                       'Status': selectedResidentForProfile.status || 'out',
                       'Monthly Rent': selectedResidentForProfile.monthlyRent || 0
                     }];
-                    const ws = utils.json_to_sheet(data);
-                    const wb = utils.book_new();
-                    utils.book_append_sheet(wb, ws, 'Resident');
-                    writeFile(wb, `${selectedResidentForProfile.fullName}_Profile.xlsx`);
+                    const ws = XLSX.utils.json_to_sheet(data);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, 'Resident');
+                    XLSX.writeFile(wb, `${selectedResidentForProfile.fullName}_Profile.xlsx`);
                   }}
                   className="flex items-center gap-2 px-6 py-3 bg-zinc-100 text-zinc-900 rounded-xl font-bold hover:bg-zinc-200 transition-all"
                 >
@@ -1805,10 +1805,10 @@ const Reports = () => {
       fileName = 'occupancy_report.xlsx';
     }
 
-    const ws = utils.json_to_sheet(data);
-    const wb = utils.book_new();
-    utils.book_append_sheet(wb, ws, 'Report');
-    writeFile(wb, fileName);
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Report');
+    XLSX.writeFile(wb, fileName);
   };
 
   return (
