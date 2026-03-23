@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { HashRouter as Router, Routes, Route, Link, useNavigate, useLocation, useSearchParams, Navigate } from 'react-router-dom';
 import { Html5QrcodeScanner, Html5Qrcode } from 'html5-qrcode';
 import { 
@@ -45,7 +45,8 @@ import {
   Shield,
   Image as ImageIcon,
   Percent,
-  Lock
+  Lock,
+  Plane
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from './supabase';
@@ -82,9 +83,10 @@ interface Resident {
   blockId: string;
   roomId: string;
   bedId?: string;
-  status: 'in' | 'out';
+  status: 'in' | 'out' | 'leave';
   photoUrl?: string;
   documentUrl?: string;
+  idCardCollected?: boolean;
   qrCode?: string;
   monthlyRent?: number;
   createdAt?: any;
@@ -738,7 +740,7 @@ const SettingsPage = () => {
 };
 
 const Dashboard = () => {
-  const [stats, setStats] = useState({ total: 0, present: 0, availableBeds: 0, revenue: 0 });
+  const [stats, setStats] = useState({ total: 0, present: 0, onLeave: 0, availableBeds: 0, revenue: 0 });
   const [hasHostels, setHasHostels] = useState<boolean | null>(null);
   const [residents, setResidents] = useState<Resident[]>([]);
   const [messageModal, setMessageModal] = useState<{ isOpen: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({
@@ -862,7 +864,8 @@ const Dashboard = () => {
           setStats(prev => ({ 
             ...prev, 
             total: residentsData.length, 
-            present: residentsData.filter(r => r.status === 'in').length 
+            present: residentsData.filter(r => r.status === 'in').length,
+            onLeave: residentsData.filter(r => r.status === 'leave').length
           }));
         }
 
@@ -944,10 +947,11 @@ const Dashboard = () => {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         {[
           { label: 'Total Residents', value: stats.total.toString(), icon: Users, color: 'bg-blue-500' },
           { label: 'Currently In', value: stats.present.toString(), icon: UserCheck, color: 'bg-emerald-500' },
+          { label: 'On Leave', value: stats.onLeave.toString(), icon: Plane, color: 'bg-indigo-500' },
           { label: 'Vacant Beds', value: stats.availableBeds.toString(), icon: Hotel, color: 'bg-amber-500' },
           { label: 'Total Revenue', value: `₹${(stats.revenue / 1000).toFixed(1)}k`, icon: CreditCard, color: 'bg-purple-500' },
         ].map((stat, i) => (
@@ -1024,6 +1028,7 @@ const ResidentList = () => {
   const [residents, setResidents] = useState<Resident[]>([]);
   const [beds, setBeds] = useState<Bed[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedResident, setSelectedResident] = useState<Resident | null>(null);
   const [selectedResidentForProfile, setSelectedResidentForProfile] = useState<Resident | null>(null);
@@ -1049,6 +1054,9 @@ const ResidentList = () => {
 
       const { data: roomData } = await supabase.from('rooms').select('*');
       if (roomData) setRooms(roomData as Room[]);
+
+      const { data: txData } = await supabase.from('transactions').select('*');
+      if (txData) setTransactions(txData as Transaction[]);
     };
 
     fetchData();
@@ -1057,6 +1065,7 @@ const ResidentList = () => {
       supabase.channel('residents-list').on('postgres_changes', { event: '*', schema: 'public', table: 'residents' }, fetchData).subscribe(),
       supabase.channel('beds-list').on('postgres_changes', { event: '*', schema: 'public', table: 'beds' }, fetchData).subscribe(),
       supabase.channel('rooms-list').on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, fetchData).subscribe(),
+      supabase.channel('transactions-list').on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, fetchData).subscribe(),
     ];
 
     return () => {
@@ -1122,7 +1131,8 @@ const ResidentList = () => {
       mobile: formData.get('mobile') as string,
       email: formData.get('email') as string,
       occupation: formData.get('occupation') as string,
-      monthlyRent: Number(formData.get('monthlyRent'))
+      monthlyRent: Number(formData.get('monthlyRent')),
+      idCardCollected: formData.get('idCardCollected') === 'on'
     };
 
     try {
@@ -1152,6 +1162,26 @@ const ResidentList = () => {
     XLSX.writeFile(wb, 'Hostel_Residents.xlsx');
   };
 
+  const calculateDues = (resident: Resident) => {
+    const totalPaid = transactions
+      .filter(tx => tx.residentId === resident.id && tx.type === 'rent')
+      .reduce((acc, curr) => acc + curr.amount, 0);
+    
+    const joiningDate = new Date(resident.createdAt as string);
+    const currentDate = new Date();
+    
+    const monthsElapsed = (currentDate.getFullYear() - joiningDate.getFullYear()) * 12 + (currentDate.getMonth() - joiningDate.getMonth()) + 1;
+    const expected = (resident.monthlyRent || 0) * monthsElapsed;
+    
+    return Math.max(0, expected - totalPaid);
+  };
+
+  const shareDueReminderOnWhatsApp = (resident: Resident, due: number, roomNumber: string) => {
+    const message = `Dear ${resident.fullName}, this is a reminder regarding your outstanding dues of ₹${due.toLocaleString()} for Room ${roomNumber}. Please clear the amount at your earliest convenience. Thank you!`;
+    const url = `https://wa.me/${resident.mobile.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank');
+  };
+
   return (
     <div className="space-y-8">
       <MessageModal {...messageModal} onClose={() => setMessageModal(prev => ({ ...prev, isOpen: false }))} />
@@ -1168,7 +1198,12 @@ const ResidentList = () => {
       <AnimatePresence>
         {editingResident && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-md rounded-[2.5rem] p-10 shadow-2xl">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }} 
+              animate={{ scale: 1, opacity: 1 }} 
+              exit={{ scale: 0.9, opacity: 0 }} 
+              className="bg-white w-full max-w-md rounded-[2.5rem] p-10 shadow-2xl max-h-[90vh] overflow-y-auto"
+            >
               <div className="flex justify-between items-center mb-8">
                 <h3 className="text-2xl font-bold">Edit Resident</h3>
                 <button onClick={() => setEditingResident(null)} className="p-2 hover:bg-zinc-100 rounded-full transition-all"><X /></button>
@@ -1198,6 +1233,16 @@ const ResidentList = () => {
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-zinc-500 px-1">Monthly Rent</label>
                   <input name="monthlyRent" type="number" defaultValue={editingResident.monthlyRent} required className="w-full p-4 bg-zinc-50 border border-zinc-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none" />
+                </div>
+                <div className="flex items-center gap-3 py-2">
+                  <input 
+                    name="idCardCollected" 
+                    type="checkbox" 
+                    id="editIdCardCollected"
+                    defaultChecked={editingResident.idCardCollected} 
+                    className="w-5 h-5 rounded border-zinc-300 text-emerald-500 focus:ring-emerald-500"
+                  />
+                  <label htmlFor="editIdCardCollected" className="text-sm font-bold text-zinc-500 cursor-pointer">ID Card Collected</label>
                 </div>
                 <button type="submit" className="w-full py-4 bg-zinc-900 text-white rounded-2xl font-bold hover:bg-zinc-800 transition-all shadow-lg shadow-zinc-900/20">
                   Update Resident
@@ -1234,9 +1279,11 @@ const ResidentList = () => {
                   <div className="flex items-center gap-3 mb-1">
                     <h2 className="text-3xl font-bold text-zinc-900">{selectedResidentForProfile.fullName}</h2>
                     <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                      selectedResidentForProfile.status === 'in' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
+                      selectedResidentForProfile.status === 'in' ? 'bg-emerald-100 text-emerald-600' : 
+                      selectedResidentForProfile.status === 'leave' ? 'bg-blue-100 text-blue-600' :
+                      'bg-rose-100 text-rose-600'
                     }`}>
-                      Currently {selectedResidentForProfile.status || 'out'}
+                      Currently {selectedResidentForProfile.status === 'leave' ? 'On Leave' : (selectedResidentForProfile.status || 'out')}
                     </span>
                   </div>
                   <p className="text-zinc-500 font-medium text-lg mb-6">{selectedResidentForProfile.occupation}</p>
@@ -1257,6 +1304,20 @@ const ResidentList = () => {
                           <p className="font-bold">{selectedResidentForProfile.email || 'N/A'}</p>
                         </div>
                       </div>
+                      <div className="flex items-center gap-3 text-zinc-600">
+                        <div className="w-8 h-8 bg-zinc-50 rounded-lg flex items-center justify-center"><Users size={16} /></div>
+                        <div>
+                          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Father's Contact</p>
+                          <p className="font-bold">{selectedResidentForProfile.fatherPhone || 'N/A'}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 text-zinc-600">
+                        <div className="w-8 h-8 bg-zinc-50 rounded-lg flex items-center justify-center"><Users size={16} /></div>
+                        <div>
+                          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Mother's Contact</p>
+                          <p className="font-bold">{selectedResidentForProfile.motherPhone || 'N/A'}</p>
+                        </div>
+                      </div>
                     </div>
                     <div className="space-y-4">
                       <div className="flex items-center gap-3 text-zinc-600">
@@ -1271,6 +1332,13 @@ const ResidentList = () => {
                         <div>
                           <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Monthly Rent</p>
                           <p className="font-bold text-emerald-600">₹{(selectedResidentForProfile.monthlyRent || 0).toLocaleString()}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 text-zinc-600">
+                        <div className="w-8 h-8 bg-zinc-50 rounded-lg flex items-center justify-center"><CheckCircle2 size={16} className={selectedResidentForProfile.idCardCollected ? 'text-emerald-500' : 'text-zinc-300'} /></div>
+                        <div>
+                          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">ID Card Collected</p>
+                          <p className="font-bold">{selectedResidentForProfile.idCardCollected ? 'Yes' : 'No'}</p>
                         </div>
                       </div>
                       {selectedResidentForProfile.documentUrl && (
@@ -1295,6 +1363,14 @@ const ResidentList = () => {
               </div>
 
               <div className="mt-10 pt-10 border-t border-zinc-100 flex justify-end gap-3">
+                {calculateDues(selectedResidentForProfile) > 0 && (
+                  <button 
+                    onClick={() => shareDueReminderOnWhatsApp(selectedResidentForProfile, calculateDues(selectedResidentForProfile), getResidentLocation(selectedResidentForProfile))}
+                    className="flex items-center gap-2 px-6 py-3 bg-emerald-500 text-zinc-900 rounded-xl font-bold hover:bg-emerald-400 transition-all"
+                  >
+                    <Share2 size={18} /> Due Reminder
+                  </button>
+                )}
                 <button 
                   onClick={() => {
                     const message = `Hello ${selectedResidentForProfile.fullName}, this is from Hostel Management.`;
@@ -1389,9 +1465,11 @@ const ResidentList = () => {
                 <div className="flex justify-between items-start">
                   <h3 className="font-bold text-zinc-900">{resident.fullName}</h3>
                   <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest ${
-                    resident.status === 'in' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
+                    resident.status === 'in' ? 'bg-emerald-100 text-emerald-600' : 
+                    resident.status === 'leave' ? 'bg-blue-100 text-blue-600' :
+                    'bg-rose-100 text-rose-600'
                   }`}>
-                    {resident.status || 'out'}
+                    {resident.status === 'leave' ? 'On Leave' : (resident.status || 'out')}
                   </span>
                 </div>
                 <p className="text-zinc-500 text-sm">{resident.occupation}</p>
@@ -1722,6 +1800,21 @@ const Reports = () => {
     return Math.max(0, expected - totalPaid);
   };
 
+  const calculateNextDueDate = (resident: Resident) => {
+    const joiningDate = new Date(resident.createdAt as string);
+    const totalPaid = transactions
+      .filter(tx => tx.residentId === resident.id && tx.type === 'rent')
+      .reduce((acc, curr) => acc + curr.amount, 0);
+    
+    const monthsPaid = Math.floor(totalPaid / (resident.monthlyRent || 1));
+    
+    // Due Date = Joining Date + (monthsPaid + 1) months
+    const dueDate = new Date(joiningDate);
+    dueDate.setMonth(dueDate.getMonth() + monthsPaid + 1);
+    
+    return dueDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+  };
+
   const shareDueReminderOnWhatsApp = (resident: Resident, due: number, roomNumber: string) => {
     const message = `Dear ${resident.fullName}, this is a reminder regarding your outstanding dues of ₹${due.toLocaleString()} for Room ${roomNumber}. Please clear the amount at your earliest convenience. Thank you!`;
     const url = `https://wa.me/${resident.mobile.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
@@ -1784,8 +1877,10 @@ const Reports = () => {
             'Resident Name': r.fullName,
             'Mobile': r.mobile,
             'Room': room ? `Room ${room.roomNumber}` : 'N/A',
+            'Joining Date': r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-IN') : 'N/A',
             'Monthly Rent': r.monthlyRent || 0,
-            'Outstanding Dues': calculateDues(r)
+            'Outstanding Dues': calculateDues(r),
+            'Due Date': calculateNextDueDate(r)
           };
         }).filter(r => r['Outstanding Dues'] > 0);
       fileName = 'dues_report.xlsx';
@@ -2103,9 +2198,12 @@ const Reports = () => {
                 <tr className="border-b border-zinc-50 text-zinc-400 text-xs font-bold uppercase tracking-widest">
                   <th className="pb-4">Resident</th>
                   <th className="pb-4">Room</th>
+                  <th className="pb-4">Joining Date</th>
+                  <th className="pb-4">ID Collected</th>
                   <th className="pb-4">Monthly Rent</th>
                   <th className="pb-4">Total Paid</th>
                   <th className="pb-4">Balance Due</th>
+                  <th className="pb-4">Due Date</th>
                   <th className="pb-4 text-right">Action</th>
                 </tr>
               </thead>
@@ -2140,9 +2238,22 @@ const Reports = () => {
                           <p className="text-[10px] text-zinc-400 font-bold">{resident.mobile}</p>
                         </td>
                         <td className="py-4 text-zinc-600 font-medium">{roomNumber}</td>
+                        <td className="py-4 text-zinc-600 font-medium">{resident.createdAt ? new Date(resident.createdAt).toLocaleDateString('en-IN') : 'N/A'}</td>
+                        <td className="py-4">
+                          {resident.idCardCollected ? (
+                            <span className="flex items-center gap-1 text-emerald-600 text-xs font-bold">
+                              <CheckCircle2 size={14} /> Yes
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 text-rose-600 text-xs font-bold">
+                              <XCircle size={14} /> No
+                            </span>
+                          )}
+                        </td>
                         <td className="py-4 text-zinc-600 font-medium">₹{(resident.monthlyRent || 0).toLocaleString()}</td>
                         <td className="py-4 text-emerald-600 font-medium">₹{paid.toLocaleString()}</td>
                         <td className="py-4 font-black text-rose-600">₹{due.toLocaleString()}</td>
+                        <td className="py-4 text-zinc-600 font-medium">{calculateNextDueDate(resident)}</td>
                         <td className="py-4 text-right">
                           <button 
                             onClick={() => shareDueReminderOnWhatsApp(resident, due, roomNumber)}
@@ -2826,7 +2937,7 @@ const AddResident = () => {
     occupation: 'Student', idNumber: '', documentType: 'Aadhar Card', bloodGroup: 'O+', allergy: '',
     fatherName: '', fatherPhone: '', motherName: '', motherPhone: '', emergencyNumber: '',
     companyName: '', companyAddress: '', fatherOccupation: '', motherOccupation: '', homeAddress: '',
-    hostelId: '', blockId: '', roomId: '', bedId: '', monthlyRent: '8500',
+    hostelId: '', blockId: '', roomId: '', bedId: '', monthlyRent: '8500', idCardCollected: false,
     photo: null as File | null,
     document: null as File | null
   });
@@ -2997,6 +3108,16 @@ const AddResident = () => {
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-zinc-700">Monthly Rent (₹)</label>
                   <input type="number" value={formData.monthlyRent} onChange={(e) => updateField('monthlyRent', e.target.value)} className="w-full p-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="8500" />
+                </div>
+                <div className="flex items-center gap-3 pt-8">
+                  <input 
+                    type="checkbox" 
+                    id="idCardCollected"
+                    checked={formData.idCardCollected} 
+                    onChange={(e) => setFormData(prev => ({ ...prev, idCardCollected: e.target.checked }))}
+                    className="w-5 h-5 rounded border-zinc-300 text-emerald-500 focus:ring-emerald-500"
+                  />
+                  <label htmlFor="idCardCollected" className="text-sm font-semibold text-zinc-700 cursor-pointer">ID Card Collected</label>
                 </div>
               </div>
 
@@ -3195,7 +3316,7 @@ const IDCard = ({ resident, onClose }: { resident: Resident, onClose: () => void
         </div>
         <div className="p-8 space-y-6 text-center">
           <div className="flex justify-center">
-            <QRCodeSVG value={resident.id} size={160} level="H" includeMargin={true} className="p-2 bg-white rounded-2xl border-2 border-zinc-100" />
+            <QRCodeSVG value={resident.id} size={240} level="H" includeMargin={true} className="p-4 bg-white rounded-3xl border-2 border-zinc-100 shadow-sm" />
           </div>
           <div className="space-y-1">
             <p className="text-zinc-400 text-xs font-bold uppercase tracking-widest">HostelHub Pro Verified</p>
@@ -3211,27 +3332,48 @@ const IDCard = ({ resident, onClose }: { resident: Resident, onClose: () => void
 const Attendance = () => {
   const [logs, setLogs] = useState<any[]>([]);
   const [scanning, setScanning] = useState(false);
-  const [scanMode, setScanMode] = useState<'smart' | 'check-in' | 'check-out'>('smart');
+  const [scanMode, setScanMode] = useState<'smart' | 'force-in' | 'force-out'>('smart');
   const [settings, setSettings] = useState<HostelSettings | null>(null);
   const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
   const [showManualModal, setShowManualModal] = useState(false);
-  const [manualEntry, setManualEntry] = useState({ residentId: '', type: 'check-in' as 'check-in' | 'check-out' | 'force-in' | 'force-out' });
+  const [manualEntry, setManualEntry] = useState({ 
+    residentId: '', 
+    type: 'check-in' as 'check-in' | 'check-out' | 'force-in' | 'force-out' | 'on-leave',
+    status: '' as string
+  });
   const [residents, setResidents] = useState<Resident[]>([]);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const { data: attendanceData } = await supabase.from('attendance').select('*').gt('timestamp', today.toISOString());
-      if (attendanceData) setLogs(attendanceData);
+  const fetchData = useCallback(async () => {
+    try {
+      console.log('Fetching attendance data...');
+      const { data: attendanceData, error: attendanceError } = await supabase
+        .from('attendance')
+        .select('*')
+        .order('timestamp', { ascending: false })
+        .limit(50);
+      
+      if (attendanceError) throw attendanceError;
+      if (attendanceData) {
+        console.log(`Fetched ${attendanceData.length} logs`);
+        setLogs(attendanceData);
+      }
 
       const { data: settingsData } = await supabase.from('settings').select('*').eq('id', 'hostel_config').single();
       if (settingsData) setSettings(settingsData as HostelSettings);
 
-      const { data: residentData } = await supabase.from('residents').select('*');
-      if (residentData) setResidents(residentData as Resident[]);
-    };
+      const { data: residentData, error: residentError } = await supabase.from('residents').select('*');
+      if (residentError) throw residentError;
+      if (residentData) {
+        console.log(`Fetched ${residentData.length} residents`);
+        setResidents(residentData as Resident[]);
+      }
+    } catch (err) {
+      console.error('Error fetching attendance data:', err);
+      setMessage({ text: 'Error syncing data with server', type: 'error' });
+    }
+  }, []);
 
+  useEffect(() => {
     fetchData();
 
     const channels = [
@@ -3243,12 +3385,14 @@ const Attendance = () => {
     return () => {
       channels.forEach(channel => supabase.removeChannel(channel));
     };
-  }, []);
+  }, [fetchData]);
 
-  const markAttendance = async (residentId: string, manualType?: 'check-in' | 'check-out' | 'force-in' | 'force-out') => {
+  const markAttendance = async (residentId: string, manualType?: 'check-in' | 'check-out' | 'force-in' | 'force-out' | 'on-leave', manualStatus?: string) => {
     try {
+      console.log('Marking attendance for:', residentId);
       const resident = residents.find(r => r.id === residentId || r.mobile === residentId);
       if (!resident) {
+        console.warn('Resident not found for ID/Mobile:', residentId);
         setMessage({ text: 'Resident not found', type: 'error' });
         setTimeout(() => setMessage(null), 3000);
         return;
@@ -3260,9 +3404,9 @@ const Attendance = () => {
       const isForce = type === 'force-in' || type === 'force-out';
       
       const now = new Date();
-      let status = actualType === 'check-in' ? 'present' : 'out';
+      let status = manualStatus || (actualType === 'check-in' ? 'present' : actualType === 'on-leave' ? 'on-leave' : 'out');
 
-      if (actualType === 'check-in' && settings && !isForce) {
+      if (actualType === 'check-in' && settings && !isForce && !manualStatus) {
         const [lateH, lateM] = settings.lateTime.split(':').map(Number);
         const [checkInH, checkInM] = (settings.checkInTime || '06:00').split(':').map(Number);
         
@@ -3275,77 +3419,80 @@ const Attendance = () => {
         }
       }
 
-      if (isForce) status = 'forced';
+      if (isForce && !manualStatus) status = 'forced';
 
-      await supabase.from('attendance').insert({
+      const { data: insertedLog, error: insertError } = await supabase.from('attendance').insert({
         residentId: resident.id,
-        type: actualType,
+        type: actualType === 'on-leave' ? 'leave' : actualType,
         status,
         isForced: isForce,
         timestamp: new Date().toISOString()
-      });
+      }).select();
       
-      await supabase.from('residents').update({
-        status: actualType === 'check-in' ? 'in' : 'out'
+      if (insertError) throw insertError;
+      console.log('Successfully inserted log:', insertedLog);
+      
+      const { error: updateError } = await supabase.from('residents').update({
+        status: actualType === 'check-in' ? 'in' : (actualType === 'on-leave' ? 'leave' : 'out')
       }).eq('id', resident.id);
 
+      if (updateError) throw updateError;
+
+      await fetchData();
+
       setMessage({ 
-        text: `${resident.fullName} ${actualType === 'check-in' ? 'Checked In' : 'Checked Out'} ${status === 'late' ? '(LATE)' : isForce ? '(FORCED)' : ''}`, 
+        text: `${resident.fullName} ${actualType === 'check-in' ? 'Checked In' : actualType === 'on-leave' ? 'Marked On Leave' : 'Checked Out'} ${status === 'late' ? '(LATE)' : isForce ? '(FORCED)' : ''}`, 
         type: status === 'late' ? 'error' : 'success' 
       });
       setTimeout(() => setMessage(null), 5000);
     } catch (e) {
-      console.error(e);
-      setMessage({ text: 'Error marking attendance', type: 'error' });
-      setTimeout(() => setMessage(null), 3000);
+      console.error('Error in markAttendance:', e);
+      setMessage({ text: 'Error marking attendance. Please check your connection.', type: 'error' });
+      setTimeout(() => setMessage(null), 5000);
     }
   };
 
   useEffect(() => {
-    let html5QrCode: Html5Qrcode | null = null;
+    let scanner: Html5QrcodeScanner | null = null;
     if (scanning) {
-      const startScanner = async () => {
-        try {
-          html5QrCode = new Html5Qrcode("reader");
-          const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-          
-          await html5QrCode.start(
-            { facingMode: "environment" }, 
-            config,
-            async (decodedText) => {
-              if (html5QrCode) {
-                await html5QrCode.stop();
-              }
-              setScanning(false);
-              await markAttendance(decodedText);
-            },
-            (errorMessage) => {
-              // ignore scan errors
-            }
-          );
-        } catch (err) {
-          console.error("Scanner Error:", err);
+      console.log('Starting scanner...');
+      scanner = new Html5QrcodeScanner(
+        "reader",
+        { 
+          fps: 10, 
+          qrbox: { width: 250, height: 250 },
+          aspectRatio: 1.0,
+          showTorchButtonIfSupported: true
+        },
+        /* verbose= */ false
+      );
+      
+      scanner.render(
+        async (decodedText) => {
+          console.log('QR Code Scanned:', decodedText);
+          if (scanner) {
+            await scanner.clear();
+          }
           setScanning(false);
-          setMessage({ text: 'Camera access denied or not found', type: 'error' });
-          setTimeout(() => setMessage(null), 5000);
+          await markAttendance(decodedText);
+        },
+        (error) => {
+          // ignore scan errors
         }
-      };
-
-      startScanner();
-
-      return () => {
-        if (html5QrCode && html5QrCode.isScanning) {
-          html5QrCode.stop().catch(e => console.error('Stop Error:', e));
-        }
-      };
+      );
     }
+    return () => {
+      if (scanner) {
+        scanner.clear().catch(e => console.error('Scanner Clear Error:', e));
+      }
+    };
   }, [scanning]);
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await markAttendance(manualEntry.residentId, manualEntry.type);
+    await markAttendance(manualEntry.residentId, manualEntry.type, manualEntry.status);
     setShowManualModal(false);
-    setManualEntry({ residentId: '', type: 'check-in' });
+    setManualEntry({ residentId: '', type: 'check-in', status: '' });
   };
 
   return (
@@ -3380,14 +3527,14 @@ const Attendance = () => {
                     Smart Toggle
                   </button>
                   <button 
-                    onClick={() => setScanMode('check-in')}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${scanMode === 'check-in' ? 'bg-emerald-500 text-zinc-900' : 'text-zinc-400 hover:text-white'}`}
+                    onClick={() => setScanMode('force-in')}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${scanMode === 'force-in' ? 'bg-emerald-500 text-zinc-900' : 'text-zinc-400 hover:text-white'}`}
                   >
                     Force In
                   </button>
                   <button 
-                    onClick={() => setScanMode('check-out')}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${scanMode === 'check-out' ? 'bg-emerald-500 text-zinc-900' : 'text-zinc-400 hover:text-white'}`}
+                    onClick={() => setScanMode('force-out')}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${scanMode === 'force-out' ? 'bg-emerald-500 text-zinc-900' : 'text-zinc-400 hover:text-white'}`}
                   >
                     Force Out
                   </button>
@@ -3397,7 +3544,7 @@ const Attendance = () => {
                   className="px-12 py-4 bg-emerald-500 text-zinc-900 rounded-2xl font-black text-lg hover:bg-emerald-400 transition-all shadow-xl shadow-emerald-500/20 flex items-center gap-3"
                 >
                   <QrCode size={24} />
-                  {scanMode === 'smart' ? 'Start Smart Scan' : `Start ${scanMode === 'check-in' ? 'Check-In' : 'Check-Out'} Scan`}
+                  {scanMode === 'smart' ? 'Start Smart Scan' : `Start ${scanMode === 'force-in' ? 'Force In' : 'Force Out'} Scan`}
                 </button>
               </div>
             </>
@@ -3415,6 +3562,10 @@ const Attendance = () => {
               <div className="flex justify-between items-center">
                 <span className="text-zinc-500">Late</span>
                 <span className="font-bold text-amber-600">{logs.filter(l => l.status === 'late').length}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-zinc-500">On Leave</span>
+                <span className="font-bold text-blue-600">{logs.filter(l => l.status === 'on-leave').length}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-zinc-500">Total Logs</span>
@@ -3437,7 +3588,16 @@ const Attendance = () => {
       </div>
 
       <div className="bg-white p-8 rounded-3xl shadow-sm border border-zinc-100">
-        <h3 className="text-xl font-bold mb-6">Today's Logs</h3>
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xl font-bold">Today's Logs</h3>
+          <button 
+            onClick={() => fetchData()}
+            className="p-2 hover:bg-zinc-100 rounded-full transition-all text-zinc-500"
+            title="Refresh Logs"
+          >
+            <Database size={18} />
+          </button>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -3449,26 +3609,45 @@ const Attendance = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-50">
-              {logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).map(log => {
-                const resident = residents.find(r => r.id === log.residentId);
-                return (
-                  <tr key={log.id}>
-                    <td className="py-4">
-                      <p className="font-bold text-zinc-900">{resident?.fullName || 'Unknown'}</p>
-                      <p className="text-xs text-zinc-500">{log.residentId.slice(0, 8).toUpperCase()}</p>
-                    </td>
-                    <td className="py-4 text-zinc-600 capitalize">{log.type}</td>
-                    <td className="py-4 text-zinc-600">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}</td>
-                    <td className="py-4">
-                      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                        log.status === 'late' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
-                      }`}>
-                        {log.status}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
+              {logs.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="py-12 text-center">
+                    <div className="flex flex-col items-center gap-2 text-zinc-400">
+                      <Database size={32} className="opacity-20" />
+                      <p className="text-sm italic">No attendance logs found for today.</p>
+                      <button 
+                        onClick={() => fetchData()}
+                        className="text-xs font-bold text-emerald-600 hover:underline mt-2"
+                      >
+                        Try Refreshing
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                [...logs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).map(log => {
+                  const resident = residents.find(r => r.id === log.residentId);
+                  return (
+                    <tr key={log.id}>
+                      <td className="py-4">
+                        <p className="font-bold text-zinc-900">{resident?.fullName || 'Unknown'}</p>
+                        <p className="text-xs text-zinc-500">{log.residentId.slice(0, 8).toUpperCase()}</p>
+                      </td>
+                      <td className="py-4 text-zinc-600 capitalize">{log.type}</td>
+                      <td className="py-4 text-zinc-600">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}</td>
+                      <td className="py-4">
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                          log.status === 'late' ? 'bg-amber-100 text-amber-700' : 
+                          log.status === 'on-leave' ? 'bg-blue-100 text-blue-700' :
+                          'bg-emerald-100 text-emerald-700'
+                        }`}>
+                          {log.status === 'on-leave' ? 'On Leave' : log.status}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
@@ -3506,6 +3685,20 @@ const Attendance = () => {
                     <option value="check-out">Standard Check-Out</option>
                     <option value="force-in">Force In (Override)</option>
                     <option value="force-out">Force Out (Override)</option>
+                    <option value="on-leave">Mark On Leave</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-zinc-700">Status Override (Optional)</label>
+                  <select 
+                    value={manualEntry.status}
+                    onChange={(e) => setManualEntry({...manualEntry, status: e.target.value})}
+                    className="w-full p-4 bg-zinc-50 border border-zinc-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                  >
+                    <option value="">Auto Detect</option>
+                    <option value="present">Present</option>
+                    <option value="late">Late</option>
+                    <option value="on-leave">On Leave</option>
                   </select>
                 </div>
                 <button type="submit" className="w-full py-4 bg-zinc-900 text-white rounded-2xl font-bold hover:bg-zinc-800 transition-all">

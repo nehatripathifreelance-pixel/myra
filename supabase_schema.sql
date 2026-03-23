@@ -158,10 +158,11 @@ CREATE TABLE IF NOT EXISTS residents (
   "blockId" UUID REFERENCES blocks(id) ON DELETE SET NULL,
   "roomId" UUID REFERENCES rooms(id) ON DELETE SET NULL,
   "bedId" UUID REFERENCES beds(id) ON DELETE SET NULL,
-  status TEXT CHECK (status IN ('in', 'out')) DEFAULT 'in',
+  status TEXT DEFAULT 'in',
   "monthlyRent" NUMERIC,
   "photoUrl" TEXT,
   "documentUrl" TEXT,
+  "idCardCollected" BOOLEAN DEFAULT FALSE,
   "createdAt" TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -584,7 +585,9 @@ CREATE TABLE IF NOT EXISTS attendance (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   "residentId" UUID REFERENCES residents(id) ON DELETE CASCADE,
   timestamp TIMESTAMPTZ DEFAULT NOW(),
-  status TEXT CHECK (status IN ('in', 'out')) DEFAULT 'in',
+  type TEXT DEFAULT 'check-in',
+  status TEXT DEFAULT 'present',
+  "isForced" BOOLEAN DEFAULT false,
   "createdAt" TIMESTAMPTZ DEFAULT NOW()
 );
 
