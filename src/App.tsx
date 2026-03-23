@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation, useSearchParams, Navigate } from 'react-router-dom';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5QrcodeScanner, Html5Qrcode } from 'html5-qrcode';
 import { 
   LayoutDashboard, 
   Users, 
@@ -32,6 +32,7 @@ import {
   Database,
   Trash2,
   Edit,
+  Edit2,
   Info,
   Wifi,
   Coffee,
@@ -39,6 +40,7 @@ import {
   Package,
   Calendar,
   Share2,
+  ExternalLink,
   Layout as LayoutIcon,
   Shield,
   Image as ImageIcon,
@@ -57,10 +59,32 @@ interface Resident {
   fullName: string;
   mobile: string;
   email: string;
+  address: string;
+  pincode: string;
+  state: string;
+  city: string;
   occupation: string;
+  idNumber: string;
+  documentType: string;
+  bloodGroup: string;
+  allergy?: string;
+  fatherName: string;
+  fatherPhone: string;
+  motherName: string;
+  motherPhone: string;
+  emergencyNumber: string;
+  companyName?: string;
+  companyAddress?: string;
+  fatherOccupation?: string;
+  motherOccupation?: string;
+  homeAddress?: string;
+  hostelId: string;
+  blockId: string;
+  roomId: string;
   bedId?: string;
   status: 'in' | 'out';
   photoUrl?: string;
+  documentUrl?: string;
   qrCode?: string;
   monthlyRent?: number;
   createdAt?: any;
@@ -75,8 +99,8 @@ interface Hostel {
 interface RoomCategory {
   id: string;
   name: string;
-  basePrice: number;
-  capacity: number;
+  price: number;
+  beds_capacity: number;
   amenities: string[];
 }
 
@@ -154,6 +178,7 @@ interface Transaction {
   transactionId?: string;
   billPhotoUrl?: string;
   taxDetails?: string; // JSON string of applied taxes
+  updatedAt?: string;
 }
 
 interface HostelSettings {
@@ -165,6 +190,8 @@ interface HostelSettings {
   address?: string;
   gstNumber?: string;
   taxes?: TaxConfig[];
+  loginBackground?: string;
+  updatedAt?: string;
 }
 
 interface Warden {
@@ -275,7 +302,7 @@ const shareBillPhotoOnWhatsApp = (tx: Transaction, resident?: Resident) => {
   window.open(whatsappUrl, '_blank');
 };
 
-const Sidebar = ({ isOpen, setIsOpen, onLogout, role, wardenName }: { isOpen: boolean, setIsOpen: (v: boolean) => void, onLogout: () => void, role: 'admin' | 'warden', wardenName?: string }) => {
+const Sidebar = ({ isOpen, setIsOpen, onLogout, role, wardenName, logo }: { isOpen: boolean, setIsOpen: (v: boolean) => void, onLogout: () => void, role: 'admin' | 'warden', wardenName?: string, logo?: string | null }) => {
   const location = useLocation();
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
@@ -297,7 +324,11 @@ const Sidebar = ({ isOpen, setIsOpen, onLogout, role, wardenName }: { isOpen: bo
       <aside className={`fixed top-0 left-0 h-full bg-zinc-900 text-zinc-400 w-72 lg:w-64 z-50 transform transition-transform duration-300 lg:translate-x-0 print:hidden flex flex-col ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-6 flex items-center justify-between border-b border-zinc-800 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center text-zinc-900 font-bold">H</div>
+            {logo ? (
+              <img src={logo} alt="Logo" className="w-8 h-8 rounded-lg object-contain bg-white" />
+            ) : (
+              <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center text-zinc-900 font-bold">H</div>
+            )}
             <span className="text-white font-bold text-xl tracking-tight">HostelHub Pro</span>
           </div>
           <button onClick={() => setIsOpen(false)} className="lg:hidden p-2 hover:bg-zinc-800 rounded-lg transition-colors">
@@ -349,6 +380,7 @@ const SettingsPage = () => {
   const [lateTime, setLateTime] = useState('22:00');
   const [checkInTime, setCheckInTime] = useState('06:00');
   const [logo, setLogo] = useState<string | null>(null);
+  const [loginBackground, setLoginBackground] = useState<string | null>(null);
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [gstNumber, setGstNumber] = useState('');
@@ -376,6 +408,7 @@ const SettingsPage = () => {
         setLateTime(settingsData.lateTime || '22:00');
         setCheckInTime(settingsData.checkInTime || '06:00');
         setLogo(settingsData.logo || null);
+        setLoginBackground(settingsData.loginBackground || null);
         setPhone(settingsData.phone || '');
         setAddress(settingsData.address || '');
         setGstNumber(settingsData.gstNumber || '');
@@ -401,9 +434,28 @@ const SettingsPage = () => {
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        showMessage('Error', 'Logo file size must be less than 2MB', 'error');
+        return;
+      }
       const reader = new FileReader();
       reader.onloadend = () => {
         setLogo(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleLoginBgUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 3 * 1024 * 1024) {
+        showMessage('Error', 'Background image size must be less than 3MB', 'error');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLoginBackground(reader.result as string);
       };
       reader.readAsDataURL(file);
     }
@@ -418,18 +470,21 @@ const SettingsPage = () => {
         lateTime,
         checkInTime,
         logo,
+        loginBackground,
         phone,
         address,
         gstNumber,
-        taxes
+        taxes,
+        updatedAt: new Date().toISOString()
       };
       
-      await supabase.from('settings').upsert(configData);
+      const { error } = await supabase.from('settings').upsert(configData);
+      if (error) throw error;
       
       showMessage('Success', 'Settings updated successfully!', 'success');
-    } catch (err) {
-      console.error(err);
-      showMessage('Error', 'Failed to update settings', 'error');
+    } catch (err: any) {
+      console.error('Error saving settings:', err);
+      showMessage('Error', err?.message || 'Failed to update settings', 'error');
     } finally {
       setSaving(false);
     }
@@ -453,9 +508,9 @@ const SettingsPage = () => {
       setShowAddWarden(false);
       setEditingWarden(null);
       showMessage('Success', `Warden ${editingWarden ? 'updated' : 'added'} successfully!`, 'success');
-    } catch (err) {
-      console.error(err);
-      showMessage('Error', 'Failed to save warden', 'error');
+    } catch (err: any) {
+      console.error('Error saving warden:', err);
+      showMessage('Error', err?.message || 'Failed to save warden', 'error');
     }
   };
 
@@ -494,6 +549,21 @@ const SettingsPage = () => {
               <div className="flex-1">
                 <p className="text-sm font-bold text-zinc-900">Hostel Logo</p>
                 <p className="text-xs text-zinc-500">Click to upload JPG/PNG. This will appear on all receipts.</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-6">
+              <div className="w-24 h-24 bg-zinc-50 rounded-3xl border-2 border-dashed border-zinc-200 flex items-center justify-center overflow-hidden relative group">
+                {loginBackground ? (
+                  <img src={loginBackground} alt="Login Background" className="w-full h-full object-cover" />
+                ) : (
+                  <ImageIcon size={24} className="text-zinc-300" />
+                )}
+                <input type="file" accept="image/*" onChange={handleLoginBgUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-bold text-zinc-900">Login Background</p>
+                <p className="text-xs text-zinc-500">Click to upload JPG/PNG. This will be the login screen background.</p>
               </div>
             </div>
 
@@ -687,15 +757,15 @@ const Dashboard = () => {
       // 1. Categories
       const { data: cat1 } = await supabase.from('roomCategories').insert({
         name: 'Standard (4 Bed)',
-        basePrice: 6500,
-        capacity: 4,
+        price: 6500,
+        beds_capacity: 4,
         amenities: ['WiFi', 'Common Washroom', 'Cleaning']
       }).select().single();
 
       const { data: cat2 } = await supabase.from('roomCategories').insert({
         name: 'Premium (2 Bed)',
-        basePrice: 9500,
-        capacity: 2,
+        price: 9500,
+        beds_capacity: 2,
         amenities: ['WiFi', 'Attached Washroom', 'AC', 'Cleaning']
       }).select().single();
 
@@ -805,12 +875,12 @@ const Dashboard = () => {
           }));
         }
 
-        const { data: payments, error: paymentsError } = await supabase.from('payments').select('amount');
-        if (paymentsError) throw paymentsError;
-        if (payments) {
+        const { data: transactions, error: transactionsError } = await supabase.from('transactions').select('totalAmount, amount');
+        if (transactionsError) throw transactionsError;
+        if (transactions) {
           setStats(prev => ({ 
             ...prev, 
-            revenue: payments.reduce((acc, p) => acc + (p.amount || 0), 0) 
+            revenue: transactions.reduce((acc, t) => acc + (t.totalAmount || t.amount || 0), 0) 
           }));
         }
 
@@ -833,7 +903,7 @@ const Dashboard = () => {
       supabase.channel('hostels-db').on('postgres_changes', { event: '*', schema: 'public', table: 'hostels' }, fetchData).subscribe(),
       supabase.channel('residents-db').on('postgres_changes', { event: '*', schema: 'public', table: 'residents' }, fetchData).subscribe(),
       supabase.channel('beds-db').on('postgres_changes', { event: '*', schema: 'public', table: 'beds' }, fetchData).subscribe(),
-      supabase.channel('payments-db').on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, fetchData).subscribe(),
+      supabase.channel('transactions-db').on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, fetchData).subscribe(),
       supabase.channel('activity-db').on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, fetchData).subscribe(),
     ];
 
@@ -1203,6 +1273,22 @@ const ResidentList = () => {
                           <p className="font-bold text-emerald-600">₹{(selectedResidentForProfile.monthlyRent || 0).toLocaleString()}</p>
                         </div>
                       </div>
+                      {selectedResidentForProfile.documentUrl && (
+                        <div className="flex items-center gap-3 text-zinc-600">
+                          <div className="w-8 h-8 bg-zinc-50 rounded-lg flex items-center justify-center"><FileText size={16} /></div>
+                          <div>
+                            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">ID Document</p>
+                            <a 
+                              href={selectedResidentForProfile.documentUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-emerald-600 font-bold hover:underline flex items-center gap-1"
+                            >
+                              View Document <ExternalLink size={12} />
+                            </a>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1678,7 +1764,7 @@ const Reports = () => {
           'Receipt No': tx.receiptNumber,
           'Date': new Date(tx.date).toLocaleDateString(),
           'Resident Name': resident?.fullName || 'Unknown',
-          'Amount': tx.amount,
+          'Amount': tx.totalAmount || tx.amount,
           'Method': tx.method,
           'Type': tx.type
         };
@@ -2410,23 +2496,42 @@ const Accounting = () => {
       const taxAmount = taxDetails.reduce((acc, t) => acc + t.amount, 0);
       const totalAmount = baseAmount + taxAmount;
 
-      await supabase.from('transactions').insert({
+      const { error } = await supabase.from('transactions').insert({
         ...newPayment,
         amount: baseAmount,
         taxAmount,
         totalAmount,
         taxDetails: JSON.stringify(taxDetails),
         date: new Date().toISOString(),
-        receiptNumber: `HH-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`
+        receiptNumber: `HH-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+        updatedAt: new Date().toISOString()
       });
+      
+      if (error) {
+        console.error('Payment Error:', error);
+        setMessageModal({
+          isOpen: true,
+          title: 'Payment Error',
+          message: error.message || 'Failed to record payment. Please check your connection.',
+          type: 'error'
+        });
+        return;
+      }
+
       setShowCollectModal(false);
       setNewPayment({ residentId: '', amount: '', type: 'rent', method: 'upi', transactionId: '', billPhotoUrl: '' });
+      setMessageModal({
+        isOpen: true,
+        title: 'Success',
+        message: 'Payment recorded successfully!',
+        type: 'success'
+      });
     } catch (err) {
       console.error(err);
     }
   };
 
-  const totalCollected = transactions.reduce((acc, curr) => acc + curr.amount, 0);
+  const totalCollected = transactions.reduce((acc, curr) => acc + (curr.totalAmount || curr.amount || 0), 0);
 
   const Receipt = ({ tx, resident, onClose }: { tx: Transaction, resident?: Resident, onClose: () => void }) => {
     const taxDetails = tx.taxDetails ? JSON.parse(tx.taxDetails) : [];
@@ -2721,7 +2826,9 @@ const AddResident = () => {
     occupation: 'Student', idNumber: '', documentType: 'Aadhar Card', bloodGroup: 'O+', allergy: '',
     fatherName: '', fatherPhone: '', motherName: '', motherPhone: '', emergencyNumber: '',
     companyName: '', companyAddress: '', fatherOccupation: '', motherOccupation: '', homeAddress: '',
-    hostelId: '', blockId: '', roomId: '', bedId: '', monthlyRent: '8500'
+    hostelId: '', blockId: '', roomId: '', bedId: '', monthlyRent: '8500',
+    photo: null as File | null,
+    document: null as File | null
   });
 
   const [hostels, setHostels] = useState<Hostel[]>([]);
@@ -2784,8 +2891,38 @@ const AddResident = () => {
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
+      let photoUrl = '';
+      let documentUrl = '';
+
+      // Upload Photo
+      if (formData.photo) {
+        const fileExt = formData.photo.name.split('.').pop();
+        const fileName = `${Math.random()}.${fileExt}`;
+        const filePath = `photos/${fileName}`;
+        const { error: uploadError } = await supabase.storage.from('residents').upload(filePath, formData.photo);
+        if (uploadError) throw uploadError;
+        const { data: { publicUrl } } = supabase.storage.from('residents').getPublicUrl(filePath);
+        photoUrl = publicUrl;
+      }
+
+      // Upload Document
+      if (formData.document) {
+        const fileExt = formData.document.name.split('.').pop();
+        const fileName = `${Math.random()}.${fileExt}`;
+        const filePath = `documents/${fileName}`;
+        const { error: uploadError } = await supabase.storage.from('residents').upload(filePath, formData.document);
+        if (uploadError) throw uploadError;
+        const { data: { publicUrl } } = supabase.storage.from('residents').getPublicUrl(filePath);
+        documentUrl = publicUrl;
+      }
+
+      const { photo, document, ...dataToInsert } = formData;
+
       const { data: residentData, error: residentError } = await supabase.from('residents').insert({
-        ...formData,
+        ...dataToInsert,
+        monthlyRent: Number(dataToInsert.monthlyRent) || 0,
+        photoUrl,
+        documentUrl,
         status: 'in',
         createdAt: new Date().toISOString()
       }).select().single();
@@ -2800,9 +2937,9 @@ const AddResident = () => {
       }
 
       navigate('/residents');
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      showMessage('Error', 'Error adding resident', 'error');
+      showMessage('Error', `Error adding resident: ${error.message || 'Unknown error'}`, 'error');
     } finally {
       setSubmitting(false);
     }
@@ -2965,20 +3102,58 @@ const AddResident = () => {
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="border-2 border-dashed border-zinc-200 rounded-3xl p-8 flex flex-col items-center justify-center gap-4 hover:border-emerald-500 transition-colors cursor-pointer">
-                  <Camera size={40} className="text-zinc-400" />
-                  <div className="text-center">
-                    <p className="font-bold text-zinc-900">Upload Photo</p>
-                    <p className="text-zinc-500 text-sm">JPG, PNG up to 5MB</p>
-                  </div>
-                </div>
-                <div className="border-2 border-dashed border-zinc-200 rounded-3xl p-8 flex flex-col items-center justify-center gap-4 hover:border-emerald-500 transition-colors cursor-pointer">
-                  <FileText size={40} className="text-zinc-400" />
-                  <div className="text-center">
-                    <p className="font-bold text-zinc-900">Upload ID Document</p>
-                    <p className="text-zinc-500 text-sm">PDF, JPG up to 10MB</p>
-                  </div>
-                </div>
+                <label className="border-2 border-dashed border-zinc-200 rounded-3xl p-8 flex flex-col items-center justify-center gap-4 hover:border-emerald-500 transition-colors cursor-pointer relative overflow-hidden">
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    className="hidden" 
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) setFormData(prev => ({ ...prev, photo: file }));
+                    }} 
+                  />
+                  {formData.photo ? (
+                    <div className="text-center">
+                      <CheckCircle2 size={40} className="text-emerald-500 mx-auto mb-2" />
+                      <p className="font-bold text-zinc-900">{formData.photo.name}</p>
+                      <p className="text-zinc-500 text-sm">Click to change</p>
+                    </div>
+                  ) : (
+                    <>
+                      <Camera size={40} className="text-zinc-400" />
+                      <div className="text-center">
+                        <p className="font-bold text-zinc-900">Upload Photo</p>
+                        <p className="text-zinc-500 text-sm">JPG, PNG up to 5MB</p>
+                      </div>
+                    </>
+                  )}
+                </label>
+                <label className="border-2 border-dashed border-zinc-200 rounded-3xl p-8 flex flex-col items-center justify-center gap-4 hover:border-emerald-500 transition-colors cursor-pointer relative overflow-hidden">
+                  <input 
+                    type="file" 
+                    accept=".pdf,image/*" 
+                    className="hidden" 
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) setFormData(prev => ({ ...prev, document: file }));
+                    }} 
+                  />
+                  {formData.document ? (
+                    <div className="text-center">
+                      <CheckCircle2 size={40} className="text-emerald-500 mx-auto mb-2" />
+                      <p className="font-bold text-zinc-900">{formData.document.name}</p>
+                      <p className="text-zinc-500 text-sm">Click to change</p>
+                    </div>
+                  ) : (
+                    <>
+                      <FileText size={40} className="text-zinc-400" />
+                      <div className="text-center">
+                        <p className="font-bold text-zinc-900">Upload ID Document</p>
+                        <p className="text-zinc-500 text-sm">PDF, JPG up to 10MB</p>
+                      </div>
+                    </>
+                  )}
+                </label>
               </div>
             </motion.div>
           )}
@@ -3127,17 +3302,41 @@ const Attendance = () => {
   };
 
   useEffect(() => {
+    let html5QrCode: Html5Qrcode | null = null;
     if (scanning) {
-      const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: { width: 250, height: 250 } }, false);
-      scanner.render(async (decodedText) => {
-        scanner.clear();
-        setScanning(false);
-        await markAttendance(decodedText);
-      }, (error) => {
-        // console.warn(error);
-      });
+      const startScanner = async () => {
+        try {
+          html5QrCode = new Html5Qrcode("reader");
+          const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+          
+          await html5QrCode.start(
+            { facingMode: "environment" }, 
+            config,
+            async (decodedText) => {
+              if (html5QrCode) {
+                await html5QrCode.stop();
+              }
+              setScanning(false);
+              await markAttendance(decodedText);
+            },
+            (errorMessage) => {
+              // ignore scan errors
+            }
+          );
+        } catch (err) {
+          console.error("Scanner Error:", err);
+          setScanning(false);
+          setMessage({ text: 'Camera access denied or not found', type: 'error' });
+          setTimeout(() => setMessage(null), 5000);
+        }
+      };
+
+      startScanner();
+
       return () => {
-        try { scanner.clear(); } catch(e) {}
+        if (html5QrCode && html5QrCode.isScanning) {
+          html5QrCode.stop().catch(e => console.error('Stop Error:', e));
+        }
       };
     }
   }, [scanning]);
@@ -3339,33 +3538,50 @@ const Infrastructure = () => {
 
   const [showAddHostel, setShowAddHostel] = useState(false);
   const [showAddCategory, setShowAddCategory] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<RoomCategory | null>(null);
   const [showAddRoom, setShowAddRoom] = useState(false);
   const [showAddBlock, setShowAddBlock] = useState(false);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      const { data: hostelData } = await supabase.from('hostels').select('*');
+  const fetchData = async () => {
+    try {
+      const { data: hostelData, error: hostelError } = await supabase.from('hostels').select('*');
+      if (hostelError) throw hostelError;
       if (hostelData) {
         setHostels(hostelData as Hostel[]);
-        if (hostelData.length > 0 && !selectedHostel) setSelectedHostel(hostelData[0]);
+        // If no hostel is selected, select the first one
+        setSelectedHostel(prev => {
+          if (!prev && hostelData.length > 0) return hostelData[0];
+          // If the selected hostel still exists in the list, keep it
+          const current = hostelData.find(h => h.id === prev?.id);
+          return current || (hostelData.length > 0 ? hostelData[0] : null);
+        });
       }
 
-      const { data: blockData } = await supabase.from('blocks').select('*');
+      const { data: blockData, error: blockError } = await supabase.from('blocks').select('*');
+      if (blockError) throw blockError;
       if (blockData) setBlocks(blockData as Block[]);
 
-      const { data: roomData } = await supabase.from('rooms').select('*');
+      const { data: roomData, error: roomError } = await supabase.from('rooms').select('*');
+      if (roomError) throw roomError;
       if (roomData) setRooms(roomData as Room[]);
 
-      const { data: categoryData } = await supabase.from('roomCategories').select('*');
+      const { data: categoryData, error: categoryError } = await supabase.from('roomCategories').select('*');
+      if (categoryError) throw categoryError;
       if (categoryData) setCategories(categoryData as RoomCategory[]);
 
-      const { data: bedData } = await supabase.from('beds').select('*');
+      const { data: bedData, error: bedError } = await supabase.from('beds').select('*');
+      if (bedError) throw bedError;
       if (bedData) setBeds(bedData as Bed[]);
 
-      const { data: residentData } = await supabase.from('residents').select('*');
+      const { data: residentData, error: residentError } = await supabase.from('residents').select('*');
+      if (residentError) throw residentError;
       if (residentData) setResidents(residentData as Resident[]);
-    };
+    } catch (err) {
+      console.error('Error in fetchData:', err);
+    }
+  };
 
+  useEffect(() => {
     fetchData();
 
     const channels = [
@@ -3388,12 +3604,18 @@ const Infrastructure = () => {
     if (selectedHostel) {
       const hostelBlocks = blocks.filter(b => b.hostelId === selectedHostel.id);
       if (hostelBlocks.length > 0) {
-        setSelectedBlock(hostelBlocks[0]);
+        // Only update if current selected block is not in the list for this hostel
+        const isCurrentValid = selectedBlock && hostelBlocks.some(b => b.id === selectedBlock.id);
+        if (!isCurrentValid) {
+          setSelectedBlock(hostelBlocks[0]);
+        }
       } else {
         setSelectedBlock(null);
       }
+    } else {
+      setSelectedBlock(null);
     }
-  }, [selectedHostel, blocks]);
+  }, [selectedHostel, blocks, selectedBlock?.id]);
 
   const handleAddHostel = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -3401,13 +3623,23 @@ const Infrastructure = () => {
     const name = formData.get('name') as string;
     const address = formData.get('address') as string;
 
-    if (editingHostel) {
-      await supabase.from('hostels').update({ name, address }).eq('id', editingHostel.id);
+    try {
+      if (editingHostel) {
+        const { error } = await supabase.from('hostels').update({ name, address }).eq('id', editingHostel.id);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase.from('hostels').insert({ name, address }).select().single();
+        if (error) throw error;
+        if (data) setSelectedHostel(data as Hostel);
+      }
+      await fetchData();
+      setShowAddHostel(false);
       setEditingHostel(null);
-    } else {
-      await supabase.from('hostels').insert({ name, address });
+      showMessage('Success', `Hostel ${editingHostel ? 'updated' : 'added'} successfully!`, 'success');
+    } catch (err) {
+      console.error('Error saving hostel:', err);
+      showMessage('Error', 'Failed to save hostel', 'error');
     }
-    setShowAddHostel(false);
   };
 
   const [messageModal, setMessageModal] = useState<{ isOpen: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({
@@ -3459,6 +3691,7 @@ const Infrastructure = () => {
     try {
       await supabase.from('hostels').delete().eq('id', id);
       if (selectedHostel?.id === id) setSelectedHostel(null);
+      await fetchData();
       setConfirmModal(prev => ({ ...prev, isOpen: false }));
       showMessage('Success', 'Hostel deleted successfully!', 'success');
     } catch (err) {
@@ -3469,26 +3702,48 @@ const Infrastructure = () => {
 
   const handleAddBlock = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!selectedHostel) return;
+    if (!selectedHostel) {
+      showMessage('Error', 'Please select a hostel first', 'error');
+      return;
+    }
     const formData = new FormData(e.currentTarget);
     const name = formData.get('name') as string;
 
-    if (editingBlock) {
-      await supabase.from('blocks').update({ name }).eq('id', editingBlock.id);
-      setEditingBlock(null);
-    } else {
-      await supabase.from('blocks').insert({
+    try {
+      console.log('Attempting to save block:', {
         hostelId: selectedHostel.id,
-        name
+        name,
+        isEditing: !!editingBlock,
+        editingBlockId: editingBlock?.id
       });
+
+      if (editingBlock) {
+        const { error } = await supabase.from('blocks').update({ name }).eq('id', editingBlock.id);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase.from('blocks').insert({
+          hostelId: selectedHostel.id,
+          name
+        }).select().single();
+        if (error) throw error;
+        if (data) setSelectedBlock(data as Block);
+      }
+      await fetchData();
+      setShowAddBlock(false);
+      setEditingBlock(null);
+      showMessage('Success', `Block ${editingBlock ? 'updated' : 'added'} successfully!`, 'success');
+    } catch (err: any) {
+      console.error('Error saving block:', err);
+      const errorMessage = err.message || 'Unknown error occurred';
+      showMessage('Error', `Failed to save block: ${errorMessage}`, 'error');
     }
-    setShowAddBlock(false);
   };
 
   const deleteBlock = async (id: string) => {
     try {
       await supabase.from('blocks').delete().eq('id', id);
       if (selectedBlock?.id === id) setSelectedBlock(null);
+      await fetchData();
       setConfirmModal(prev => ({ ...prev, isOpen: false }));
       showMessage('Success', 'Block deleted successfully!', 'success');
     } catch (err) {
@@ -3501,13 +3756,30 @@ const Infrastructure = () => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const amenities = (formData.get('amenities') as string).split(',').map(s => s.trim());
-    await supabase.from('roomCategories').insert({
+    const categoryData = {
       name: formData.get('name'),
-      basePrice: Number(formData.get('basePrice')),
-      capacity: Number(formData.get('capacity')),
+      price: Number(formData.get('price')),
+      beds_capacity: Number(formData.get('beds_capacity')),
       amenities
-    });
-    setShowAddCategory(false);
+    };
+
+    try {
+      if (editingCategory) {
+        const { error } = await supabase.from('roomCategories').update(categoryData).eq('id', editingCategory.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('roomCategories').insert(categoryData);
+        if (error) throw error;
+      }
+      await fetchData();
+      setShowAddCategory(false);
+      setEditingCategory(null);
+      showMessage('Success', `Category ${editingCategory ? 'updated' : 'added'} successfully!`, 'success');
+    } catch (err: any) {
+      console.error('Error saving category:', err);
+      const errorMessage = err.message || 'Unknown error occurred';
+      showMessage('Error', `Failed to save category: ${errorMessage}`, 'error');
+    }
   };
 
   const deleteCategory = async (id: string, name: string) => {
@@ -3523,6 +3795,7 @@ const Infrastructure = () => {
       async () => {
         try {
           await supabase.from('roomCategories').delete().eq('id', id);
+          await fetchData();
           setConfirmModal(prev => ({ ...prev, isOpen: false }));
           showMessage('Success', 'Category deleted successfully!', 'success');
         } catch (err) {
@@ -3535,47 +3808,72 @@ const Infrastructure = () => {
 
   const handleAddRoom = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!selectedBlock) return;
+    if (!selectedBlock) {
+      showMessage('Error', 'Please select a block first', 'error');
+      return;
+    }
     const formData = new FormData(e.currentTarget);
     const categoryId = formData.get('categoryId') as string;
     const roomNumber = formData.get('roomNumber') as string;
     const floor = formData.get('floor') as string;
     
     const category = categories.find(c => c.id === categoryId);
-    if (!category) return;
+    if (!category) {
+      showMessage('Error', 'Please select a valid category', 'error');
+      return;
+    }
 
-    if (editingRoom) {
-      await supabase.from('rooms').update({
-        roomNumber,
-        categoryId,
-        floor
-      }).eq('id', editingRoom.id);
-      setEditingRoom(null);
-    } else {
-      const { data: roomData, error: roomError } = await supabase.from('rooms').insert({
+    try {
+      console.log('Attempting to save room:', {
         blockId: selectedBlock.id,
         roomNumber,
         categoryId,
-        status: 'available',
-        floor
-      }).select().single();
+        floor,
+        isEditing: !!editingRoom,
+        editingRoomId: editingRoom?.id
+      });
 
-      if (roomError) throw roomError;
+      if (editingRoom) {
+        const { error } = await supabase.from('rooms').update({
+          roomNumber,
+          categoryId,
+          floor
+        }).eq('id', editingRoom.id);
+        if (error) throw error;
+      } else {
+        const { data: roomData, error: roomError } = await supabase.from('rooms').insert({
+          blockId: selectedBlock.id,
+          roomNumber,
+          categoryId,
+          status: 'available',
+          floor
+        }).select().single();
 
-      if (roomData) {
-        // Create beds automatically based on category capacity
-        const bedsToInsert = [];
-        for (let i = 1; i <= category.capacity; i++) {
-          bedsToInsert.push({
-            roomId: roomData.id,
-            bedNumber: `${roomNumber}-${String.fromCharCode(64 + i)}`,
-            status: 'available'
-          });
+        if (roomError) throw roomError;
+
+        if (roomData) {
+          // Create beds automatically based on category capacity
+          const bedsToInsert = [];
+          for (let i = 1; i <= category.beds_capacity; i++) {
+            bedsToInsert.push({
+              roomId: roomData.id,
+              bedNumber: `${roomNumber}-${String.fromCharCode(64 + i)}`,
+              status: 'available'
+            });
+          }
+          const { error: bedError } = await supabase.from('beds').insert(bedsToInsert);
+          if (bedError) throw bedError;
         }
-        await supabase.from('beds').insert(bedsToInsert);
       }
+      await fetchData();
+      setShowAddRoom(false);
+      setEditingRoom(null);
+      showMessage('Success', `Room ${editingRoom ? 'updated' : 'added'} successfully!`, 'success');
+    } catch (err: any) {
+      console.error('Error saving room:', err);
+      const errorMessage = err.message || 'Unknown error occurred';
+      showMessage('Error', `Failed to save room: ${errorMessage}`, 'error');
     }
-    setShowAddRoom(false);
   };
 
   const deleteRoom = async (id: string, roomNumber: string) => {
@@ -3586,6 +3884,7 @@ const Infrastructure = () => {
         try {
           await supabase.from('rooms').delete().eq('id', id);
           await supabase.from('beds').delete().eq('roomId', id);
+          await fetchData();
           setConfirmModal(prev => ({ ...prev, isOpen: false }));
           showMessage('Success', 'Room deleted successfully!', 'success');
         } catch (err) {
@@ -3638,14 +3937,20 @@ const Infrastructure = () => {
         </div>
         <div className="flex gap-2 sm:gap-3">
           <button 
-            onClick={() => setShowAddCategory(true)}
+            onClick={() => {
+              setEditingCategory(null);
+              setShowAddCategory(true);
+            }}
             className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-white border border-zinc-200 text-zinc-900 rounded-xl font-bold hover:bg-zinc-50 transition-all text-sm"
           >
             <Settings size={16} />
             Categories
           </button>
           <button 
-            onClick={() => setShowAddHostel(true)}
+            onClick={() => {
+              setEditingHostel(null);
+              setShowAddHostel(true);
+            }}
             className="flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-3 bg-zinc-900 text-white rounded-xl font-bold hover:bg-zinc-800 transition-all text-sm"
           >
             <Plus size={18} />
@@ -3900,11 +4205,18 @@ const Infrastructure = () => {
                                       <button 
                                         onClick={async (e) => {
                                           e.stopPropagation();
-                                          await supabase.from('beds').insert({
-                                            roomId: room.id,
-                                            bedNumber: `${room.roomNumber}-${String.fromCharCode(64 + roomBeds.length + 1)}`,
-                                            status: 'available'
-                                          });
+                                          try {
+                                            const { error } = await supabase.from('beds').insert({
+                                              roomId: room.id,
+                                              bedNumber: `${room.roomNumber}-${String.fromCharCode(64 + roomBeds.length + 1)}`,
+                                              status: 'available'
+                                            });
+                                            if (error) throw error;
+                                            showMessage('Success', 'Bed added successfully!', 'success');
+                                          } catch (err) {
+                                            console.error('Error adding bed:', err);
+                                            showMessage('Error', 'Failed to add bed', 'error');
+                                          }
                                         }}
                                         className="p-1.5 hover:bg-zinc-100 rounded-lg text-zinc-400 hover:text-zinc-600 transition-all"
                                         title="Add Bed"
@@ -4048,18 +4360,29 @@ const Infrastructure = () => {
                     <div className="flex justify-between items-start mb-2">
                       <h4 className="font-bold text-zinc-900">{cat.name}</h4>
                       <div className="flex items-center gap-2">
-                        <span className="text-emerald-600 font-bold">₹{cat.basePrice}/mo</span>
-                        <button 
-                          onClick={() => {
-                            deleteCategory(cat.id, cat.name);
-                          }}
-                          className="p-1 text-zinc-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        <span className="text-emerald-600 font-bold">₹{cat.price}/mo</span>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button 
+                            onClick={() => {
+                              setEditingCategory(cat);
+                              setShowAddCategory(true);
+                            }}
+                            className="p-1 text-zinc-400 hover:text-emerald-500"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                          <button 
+                            onClick={() => {
+                              deleteCategory(cat.id, cat.name);
+                            }}
+                            className="p-1 text-zinc-400 hover:text-rose-500"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                    <p className="text-xs text-zinc-500 mb-3">Capacity: {cat.capacity} Beds</p>
+                    <p className="text-xs text-zinc-500 mb-3">Capacity: {cat.beds_capacity} Beds</p>
                     <div className="flex flex-wrap gap-1">
                       {cat.amenities.map(a => (
                         <span key={a} className="text-[10px] px-2 py-0.5 bg-white border border-zinc-200 rounded-lg text-zinc-600">{a}</span>
@@ -4070,17 +4393,30 @@ const Infrastructure = () => {
               </div>
 
               <div className="pt-6 border-t border-zinc-100">
-                <h4 className="font-bold mb-4">Add New Category</h4>
+                <h4 className="font-bold mb-4">{editingCategory ? 'Edit Category' : 'Add New Category'}</h4>
                 <form onSubmit={handleAddCategory} className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
-                    <input name="name" required className="p-3 bg-zinc-50 border border-zinc-200 rounded-xl outline-none text-sm" placeholder="Name (e.g. Deluxe)" />
-                    <input name="basePrice" type="number" required className="p-3 bg-zinc-50 border border-zinc-200 rounded-xl outline-none text-sm" placeholder="Price" />
+                    <input name="name" defaultValue={editingCategory?.name} required className="p-3 bg-zinc-50 border border-zinc-200 rounded-xl outline-none text-sm" placeholder="Name (e.g. Deluxe)" />
+                    <input name="price" defaultValue={editingCategory?.price} type="number" required className="p-3 bg-zinc-50 border border-zinc-200 rounded-xl outline-none text-sm" placeholder="Price" />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
-                    <input name="capacity" type="number" required className="p-3 bg-zinc-50 border border-zinc-200 rounded-xl outline-none text-sm" placeholder="Beds Capacity" />
-                    <input name="amenities" className="p-3 bg-zinc-50 border border-zinc-200 rounded-xl outline-none text-sm" placeholder="Amenities (comma separated)" />
+                    <input name="beds_capacity" defaultValue={editingCategory?.beds_capacity} type="number" required className="p-3 bg-zinc-50 border border-zinc-200 rounded-xl outline-none text-sm" placeholder="Beds Capacity" />
+                    <input name="amenities" defaultValue={editingCategory?.amenities.join(', ')} className="p-3 bg-zinc-50 border border-zinc-200 rounded-xl outline-none text-sm" placeholder="Amenities (comma separated)" />
                   </div>
-                  <button type="submit" className="w-full py-3 bg-emerald-500 text-zinc-900 rounded-xl font-bold hover:bg-emerald-400 transition-all">Create Category</button>
+                  <div className="flex gap-3">
+                    {editingCategory && (
+                      <button 
+                        type="button" 
+                        onClick={() => setEditingCategory(null)}
+                        className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-xl font-bold hover:bg-zinc-200 transition-all"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                    <button type="submit" className="flex-[2] py-3 bg-emerald-500 text-zinc-900 rounded-xl font-bold hover:bg-emerald-400 transition-all">
+                      {editingCategory ? 'Update Category' : 'Create Category'}
+                    </button>
+                  </div>
                 </form>
               </div>
             </motion.div>
@@ -4110,14 +4446,14 @@ const Infrastructure = () => {
                   <select name="categoryId" defaultValue={editingRoom?.categoryId} required className="w-full p-4 bg-zinc-50 border border-zinc-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none appearance-none">
                     <option value="">Select Category</option>
                     {categories.map(cat => (
-                      <option key={cat.id} value={cat.id}>{cat.name} ({cat.capacity} Beds)</option>
+                      <option key={cat.id} value={cat.id}>{cat.name} ({cat.beds_capacity} Beds)</option>
                     ))}
                   </select>
                 </div>
                 {!editingRoom && (
                   <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl flex gap-3">
                     <AlertCircle className="text-amber-500 shrink-0" size={20} />
-                    <p className="text-xs text-amber-700 leading-relaxed">Beds will be automatically generated based on the selected category's capacity.</p>
+                    <p className="text-xs text-amber-700 leading-relaxed">Beds will be automatically generated based on the selected category's beds_capacity.</p>
                   </div>
                 )}
                 <button type="submit" className="w-full py-4 bg-zinc-900 text-white rounded-2xl font-bold hover:bg-zinc-800 transition-all shadow-lg shadow-zinc-900/20">
@@ -4153,11 +4489,11 @@ const Infrastructure = () => {
                           </div>
                           <div className="flex justify-between">
                             <span className="text-zinc-500">Price</span>
-                            <span className="font-bold text-emerald-600">₹{cat?.basePrice}/mo</span>
+                            <span className="font-bold text-emerald-600">₹{cat?.price}/mo</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-zinc-500">Capacity</span>
-                            <span className="font-bold">{cat?.capacity} Beds</span>
+                            <span className="font-bold">{cat?.beds_capacity} Beds</span>
                           </div>
                           <div className="pt-2 flex flex-wrap gap-1">
                             {cat?.amenities.map(a => (
@@ -4273,7 +4609,7 @@ const Infrastructure = () => {
   );
 };
 
-const Auth = ({ onLogin }: { onLogin: (role: 'admin' | 'warden', data?: Warden) => void }) => {
+const Auth = ({ onLogin, settings }: { onLogin: (role: 'admin' | 'warden', data?: Warden) => void, settings: HostelSettings | null }) => {
   const [adminId, setAdminId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -4296,7 +4632,7 @@ const Auth = ({ onLogin }: { onLogin: (role: 'admin' | 'warden', data?: Warden) 
       const { data, error } = await supabase
         .from('wardens')
         .select('*')
-        .eq('warden_id', adminId)
+        .eq('wardenId', adminId)
         .eq('password', password)
         .single();
 
@@ -4315,8 +4651,14 @@ const Auth = ({ onLogin }: { onLogin: (role: 'admin' | 'warden', data?: Warden) 
     }
   };
 
+  const bgImage = settings?.loginBackground || 'https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=2069&auto=format&fit=crop';
+  const logoImage = settings?.logo || 'https://picsum.photos/seed/myra/100/100';
+
   return (
-    <div className="min-h-screen bg-[url('https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=2069&auto=format&fit=crop')] bg-cover bg-center flex items-center justify-center p-6 relative">
+    <div 
+      className="min-h-screen bg-cover bg-center flex items-center justify-center p-6 relative"
+      style={{ backgroundImage: `url(${bgImage})` }}
+    >
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
       
       <motion.div 
@@ -4327,7 +4669,7 @@ const Auth = ({ onLogin }: { onLogin: (role: 'admin' | 'warden', data?: Warden) 
         <div className="p-12 text-center space-y-8">
           <div className="flex flex-col items-center gap-2">
             <div className="flex items-center gap-3">
-              <img src="https://picsum.photos/seed/myra/100/100" alt="Myra Logo" className="w-16 h-16 rounded-full border-2 border-[#8B2323]" />
+              <img src={logoImage} alt="Hostel Logo" className="w-16 h-16 rounded-full border-2 border-[#8B2323] object-cover" />
               <div className="text-left">
                 <h1 className="text-5xl font-serif font-black text-[#8B2323] tracking-tight leading-none">Myra</h1>
                 <p className="text-[#B8860B] font-bold text-sm tracking-[0.2em] uppercase">HOSTEL'S</p>
@@ -4415,6 +4757,22 @@ export default function App() {
   const [wardenData, setWardenData] = useState<Warden | null>(null);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [settings, setSettings] = useState<HostelSettings | null>(null);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const { data } = await supabase.from('settings').select('*').eq('id', 'hostel_config').single();
+        if (data) setSettings(data as HostelSettings);
+      } catch (err) {
+        console.error('Error fetching settings:', err);
+      }
+    };
+    fetchSettings();
+
+    const channel = supabase.channel('settings-global-ch').on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, fetchSettings).subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
   useEffect(() => {
     const initAuth = async () => {
@@ -4464,7 +4822,7 @@ export default function App() {
     </div>
   );
 
-  if (!userRole) return <Auth onLogin={handleLogin} />;
+  if (!userRole) return <Auth onLogin={handleLogin} settings={settings} />;
 
   return (
     <Router>
@@ -4475,6 +4833,7 @@ export default function App() {
           onLogout={handleLogout} 
           role={userRole}
           wardenName={wardenData?.name}
+          logo={settings?.logo}
         />
         
         <main className="flex-1 lg:ml-64 p-4 sm:p-6 lg:p-10 overflow-x-hidden">
