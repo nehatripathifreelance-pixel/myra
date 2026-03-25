@@ -849,6 +849,9 @@ const Dashboard = () => {
 
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [roomCategories, setRoomCategories] = useState<RoomCategory[]>([]);
+  const [beds, setBeds] = useState<Bed[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -869,14 +872,21 @@ const Dashboard = () => {
           }));
         }
 
-        const { data: beds, error: bedsError } = await supabase.from('beds').select('status');
+        const { data: bedsData, error: bedsError } = await supabase.from('beds').select('*');
         if (bedsError) throw bedsError;
-        if (beds) {
+        if (bedsData) {
+          setBeds(bedsData as Bed[]);
           setStats(prev => ({ 
             ...prev, 
-            availableBeds: beds.filter(b => b.status === 'available').length 
+            availableBeds: bedsData.filter(b => b.status === 'available').length 
           }));
         }
+
+        const { data: roomsData } = await supabase.from('rooms').select('*');
+        if (roomsData) setRooms(roomsData as Room[]);
+
+        const { data: categoriesData } = await supabase.from('roomCategories').select('*');
+        if (categoriesData) setRoomCategories(categoriesData as RoomCategory[]);
 
         const { data: transactions, error: transactionsError } = await supabase.from('transactions').select('totalAmount, amount');
         if (transactionsError) throw transactionsError;
@@ -998,18 +1008,28 @@ const Dashboard = () => {
         <div className="bg-white p-8 rounded-3xl shadow-sm border border-zinc-100">
           <h3 className="text-xl font-bold mb-6">Room Availability</h3>
           <div className="space-y-4">
-            {['Standard', 'Premium', 'Deluxe'].map((cat) => (
-              <div key={cat} className="p-4 bg-zinc-50 rounded-2xl flex items-center justify-between">
-                <div>
-                  <p className="font-bold text-zinc-900">{cat} Rooms</p>
-                  <p className="text-zinc-500 text-sm">4 beds per room</p>
+            {roomCategories.length > 0 ? roomCategories.map((cat) => {
+              const categoryRooms = rooms.filter(r => r.categoryId === cat.id);
+              const availableBedsInCategory = beds.filter(b => {
+                const room = categoryRooms.find(r => r.id === b.roomId);
+                return room && b.status === 'available';
+              }).length;
+
+              return (
+                <div key={cat.id} className="p-4 bg-zinc-50 rounded-2xl flex items-center justify-between">
+                  <div>
+                    <p className="font-bold text-zinc-900">{cat.name} Rooms</p>
+                    <p className="text-zinc-500 text-sm">{cat.beds_capacity || 0} beds per room</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-emerald-600 font-bold">{availableBedsInCategory} Available</p>
+                    <p className="text-zinc-400 text-xs">₹{(cat.price || 0).toLocaleString()}/mo</p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-emerald-600 font-bold">5 Available</p>
-                  <p className="text-zinc-400 text-xs">₹8,500/mo</p>
-                </div>
-              </div>
-            ))}
+              );
+            }) : (
+              <div className="text-center py-10 text-zinc-400">No room categories defined</div>
+            )}
           </div>
         </div>
       </div>
@@ -1164,7 +1184,7 @@ const ResidentList = () => {
   const calculateDues = (resident: Resident) => {
     const totalPaid = transactions
       .filter(tx => tx.residentId === resident.id && tx.type === 'rent')
-      .reduce((acc, curr) => acc + curr.amount, 0);
+      .reduce((acc, curr) => acc + (curr.totalAmount || curr.amount || 0), 0);
     
     const joiningDate = new Date(resident.createdAt as string);
     const currentDate = new Date();
@@ -1568,14 +1588,14 @@ const ParcelManagement = () => {
 
   return (
     <div className="space-y-8">
-      <header className="flex justify-between items-center">
+      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-zinc-900">Parcel Management</h1>
           <p className="text-zinc-500">Track incoming couriers and parcels for residents.</p>
         </div>
         <button 
           onClick={() => setShowAddModal(true)}
-          className="px-6 py-3 bg-zinc-900 text-white rounded-2xl font-bold flex items-center gap-2 hover:bg-zinc-800 transition-all"
+          className="w-full sm:w-auto px-6 py-3 bg-zinc-900 text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-zinc-800 transition-all"
         >
           <Plus size={20} /> Log New Parcel
         </button>
@@ -1715,7 +1735,7 @@ const ParcelManagement = () => {
 };
 
 const Reports = () => {
-  const [tab, setTab] = useState<'attendance' | 'leaves' | 'collections' | 'dues' | 'occupancy'>('attendance');
+  const [tab, setTab] = useState<'attendance' | 'leaves' | 'collections' | 'ledger' | 'occupancy'>('attendance');
   const [attendance, setAttendance] = useState<any[]>([]);
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -1725,6 +1745,7 @@ const Reports = () => {
   const [searchParams] = useSearchParams();
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedRoomId, setSelectedRoomId] = useState<string>('all');
   const [editingResidentId, setEditingResidentId] = useState<string | null>(null);
   const [editingField, setEditingField] = useState<'joining' | 'due' | null>(null);
@@ -1806,7 +1827,7 @@ const Reports = () => {
   const calculateDues = (resident: Resident) => {
     const totalPaid = transactions
       .filter(tx => tx.residentId === resident.id && tx.type === 'rent')
-      .reduce((acc, curr) => acc + curr.amount, 0);
+      .reduce((acc, curr) => acc + (curr.totalAmount || curr.amount || 0), 0);
     
     // Improved logic: Calculate months since joining
     const joiningDate = new Date(resident.createdAt as string);
@@ -1825,7 +1846,7 @@ const Reports = () => {
     const joiningDate = new Date(resident.createdAt as string);
     const totalPaid = transactions
       .filter(tx => tx.residentId === resident.id && tx.type === 'rent')
-      .reduce((acc, curr) => acc + curr.amount, 0);
+      .reduce((acc, curr) => acc + (curr.totalAmount || curr.amount || 0), 0);
     
     const monthsPaid = Math.floor(totalPaid / (resident.monthlyRent || 1));
     
@@ -1884,7 +1905,7 @@ const Reports = () => {
         };
       });
       fileName = 'collections_report.xlsx';
-    } else if (tab === 'dues') {
+    } else if (tab === 'ledger') {
       data = residents
         .filter(r => {
           if (selectedRoomId === 'all') return true;
@@ -1894,17 +1915,29 @@ const Reports = () => {
         .map(r => {
           const bed = beds.find(b => b.id === r.bedId);
           const room = rooms.find(rm => rm.id === bed?.roomId);
+          const due = calculateDues(r);
+          const paid = transactions
+            .filter(tx => tx.residentId === r.id && tx.type === 'rent')
+            .reduce((acc, curr) => acc + (curr.totalAmount || curr.amount || 0), 0);
+          
+          let status = 'Paid';
+          if (due > 0) {
+            status = paid > 0 ? 'Partly Paid' : 'Unpaid';
+          }
+
           return {
             'Resident Name': r.fullName,
             'Mobile': r.mobile,
-            'Room': room ? `Room ${room.roomNumber}` : 'N/A',
-            'Joining Date': r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-IN') : 'N/A',
+            'Room Number': room?.roomNumber || 'N/A',
+            'Joining Date': r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'N/A',
             'Monthly Rent': r.monthlyRent || 0,
-            'Outstanding Dues': calculateDues(r),
-            'Due Date': calculateNextDueDate(r)
+            'Total Paid': paid,
+            'Status': status,
+            'Accumulated Due': due,
+            'Due Date': r.nextDueDate ? new Date(r.nextDueDate).toLocaleDateString() : 'N/A'
           };
-        }).filter(r => r['Outstanding Dues'] > 0);
-      fileName = 'dues_report.xlsx';
+        });
+      fileName = 'ledger_report.xlsx';
     } else if (tab === 'occupancy') {
       data = rooms.map(room => {
         const roomBeds = beds.filter(b => b.roomId === room.id);
@@ -1944,45 +1977,58 @@ const Reports = () => {
         </div>
       </header>
 
-      <div className="flex flex-wrap gap-4 border-b border-zinc-100 pb-4 print:hidden">
-        <div className="flex-1 flex gap-4 min-w-[300px]">
+      <div className="flex flex-col sm:flex-row flex-wrap gap-4 border-b border-zinc-100 pb-4 print:hidden">
+        <div className="flex flex-wrap gap-2 sm:gap-4">
           {[
             { id: 'attendance', label: 'Attendance', icon: UserCheck },
             { id: 'leaves', label: 'Leaves', icon: ClipboardList },
             { id: 'collections', label: 'Collections', icon: CreditCard },
-            { id: 'dues', label: 'Dues', icon: AlertCircle },
+            { id: 'ledger', label: 'Ledger', icon: Database },
             { id: 'occupancy', label: 'Occupancy', icon: Hotel },
           ].map(t => (
             <button
               key={t.id}
               onClick={() => setTab(t.id as any)}
-              className={`px-6 py-2 rounded-xl font-bold flex items-center gap-2 transition-all ${
+              className={`px-3 sm:px-6 py-2 rounded-xl font-bold flex items-center gap-2 transition-all text-sm ${
                 tab === t.id ? 'bg-emerald-500 text-zinc-900 shadow-lg shadow-emerald-500/20' : 'text-zinc-400 hover:bg-zinc-100'
               }`}
             >
-              <t.icon size={18} /> {t.label}
+              <t.icon size={18} /> <span className="hidden xs:inline">{t.label}</span>
             </button>
           ))}
         </div>
         
-        <div className="flex items-center gap-3 bg-zinc-50 p-2 rounded-2xl border border-zinc-100">
-          <Calendar size={16} className="text-zinc-400 ml-2" />
-          <input 
-            type="date" 
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="bg-transparent text-xs font-bold outline-none text-zinc-600"
-          />
-          <span className="text-zinc-300">to</span>
-          <input 
-            type="date" 
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="bg-transparent text-xs font-bold outline-none text-zinc-600"
-          />
+        <div className="flex flex-wrap items-center gap-3 bg-zinc-50 p-2 rounded-2xl border border-zinc-100 w-full sm:w-auto">
+          <div className="flex items-center gap-2 flex-1 min-w-[150px]">
+            <Search size={16} className="text-zinc-400 ml-2" />
+            <input 
+              type="text" 
+              placeholder="Search by name..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="bg-transparent text-xs font-bold outline-none text-zinc-600 w-full"
+            />
+          </div>
+          <div className="hidden sm:block w-px h-4 bg-zinc-200 mx-1" />
+          <div className="flex items-center gap-2">
+            <Calendar size={16} className="text-zinc-400 ml-2" />
+            <input 
+              type="date" 
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="bg-transparent text-xs font-bold outline-none text-zinc-600"
+            />
+            <span className="text-zinc-300">to</span>
+            <input 
+              type="date" 
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="bg-transparent text-xs font-bold outline-none text-zinc-600"
+            />
+          </div>
         </div>
 
-        {tab === 'dues' && (
+        {tab === 'ledger' && (
           <div className="flex items-center gap-3 bg-zinc-50 p-2 rounded-2xl border border-zinc-100">
             <Hotel size={16} className="text-zinc-400 ml-2" />
             <select
@@ -2013,8 +2059,13 @@ const Reports = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-50">
-                {attendance.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).map(log => {
-                  const resident = residents.find(r => r.id === log.residentId);
+                {attendance
+                  .filter(log => {
+                    const resident = residents.find(r => r.id === log.residentId);
+                    return resident?.fullName.toLowerCase().includes(searchTerm.toLowerCase());
+                  })
+                  .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).map(log => {
+                    const resident = residents.find(r => r.id === log.residentId);
                   return (
                     <tr key={log.id}>
                       <td className="py-4">
@@ -2059,8 +2110,13 @@ const Reports = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-50">
-                {leaves.sort((a, b) => new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime()).map(leave => {
-                  const resident = residents.find(r => r.id === leave.residentId);
+                {leaves
+                  .filter(leave => {
+                    const resident = residents.find(r => r.id === leave.residentId);
+                    return resident?.fullName.toLowerCase().includes(searchTerm.toLowerCase());
+                  })
+                  .sort((a, b) => new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime()).map(leave => {
+                    const resident = residents.find(r => r.id === leave.residentId);
                   return (
                     <tr key={leave.id}>
                       <td className="py-4">
@@ -2100,8 +2156,13 @@ const Reports = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-50">
-                {transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(tx => {
-                  const resident = residents.find(r => r.id === tx.residentId);
+                {transactions
+                  .filter(tx => {
+                    const resident = residents.find(r => r.id === tx.residentId);
+                    return resident?.fullName.toLowerCase().includes(searchTerm.toLowerCase());
+                  })
+                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(tx => {
+                    const resident = residents.find(r => r.id === tx.residentId);
                   return (
                     <tr key={tx.id}>
                       <td className="py-4">
@@ -2109,7 +2170,7 @@ const Reports = () => {
                         <p className="text-[10px] text-zinc-400 uppercase font-bold">{tx.date ? new Date(tx.date).toLocaleDateString() : 'N/A'}</p>
                       </td>
                       <td className="py-4 font-bold text-zinc-900">{resident?.fullName || 'Unknown'}</td>
-                      <td className="py-4 font-black text-emerald-600">₹{tx.amount.toLocaleString()}</td>
+                      <td className="py-4 font-black text-emerald-600">₹{(tx.totalAmount || tx.amount).toLocaleString()}</td>
                       <td className="py-4">
                         <div className="flex items-center justify-between">
                           <div>
@@ -2211,10 +2272,15 @@ const Reports = () => {
           </div>
         )}
 
-        {tab === 'dues' && (
-          <div className="p-8">
-            <h3 className="text-xl font-bold mb-6">Outstanding Dues</h3>
-            <table className="w-full text-left">
+        {tab === 'ledger' && (
+          <div className="p-8 overflow-x-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold">Resident Ledger</h3>
+              <div className="text-xs font-bold text-zinc-400 uppercase tracking-widest">
+                Accumulative Basis
+              </div>
+            </div>
+            <table className="w-full text-left min-w-[800px]">
               <thead>
                 <tr className="border-b border-zinc-50 text-zinc-400 text-xs font-bold uppercase tracking-widest">
                   <th className="pb-4">Resident</th>
@@ -2222,7 +2288,8 @@ const Reports = () => {
                   <th className="pb-4">Joining Date</th>
                   <th className="pb-4">Monthly Rent</th>
                   <th className="pb-4">Total Paid</th>
-                  <th className="pb-4">Balance Due</th>
+                  <th className="pb-4">Status</th>
+                  <th className="pb-4">Accumulated Due</th>
                   <th className="pb-4">Due Date</th>
                   <th className="pb-4 text-right">Action</th>
                 </tr>
@@ -2230,6 +2297,8 @@ const Reports = () => {
               <tbody className="divide-y divide-zinc-50">
                 {residents
                   .filter(resident => {
+                    const matchesName = resident.fullName.toLowerCase().includes(searchTerm.toLowerCase());
+                    if (!matchesName) return false;
                     if (selectedRoomId === 'all') return true;
                     const bed = beds.find(b => b.id === resident.bedId);
                     return bed?.roomId === selectedRoomId;
@@ -2240,19 +2309,26 @@ const Reports = () => {
                     const roomNumber = room ? `Room ${room.roomNumber}` : 'N/A';
 
                     const paid = transactions
-                      .filter(tx => {
-                        const txDate = tx.date ? new Date(tx.date) : new Date();
-                        const isWithinRange = (!startDate || txDate >= new Date(startDate)) && 
-                                             (!endDate || txDate <= new Date(endDate));
-                        return tx.residentId === resident.id && tx.type === 'rent' && isWithinRange;
-                      })
-                      .reduce((acc, curr) => acc + curr.amount, 0);
+                      .filter(tx => tx.residentId === resident.id && tx.type === 'rent')
+                      .reduce((acc, curr) => acc + (curr.totalAmount || curr.amount || 0), 0);
                     
                     const due = calculateDues(resident);
-                    if (due === 0) return null;
                     
+                    let status = 'Paid';
+                    let statusColor = 'text-emerald-600 bg-emerald-50';
+                    
+                    if (due > 0) {
+                      if (paid > 0) {
+                        status = 'Partly Paid';
+                        statusColor = 'text-amber-600 bg-amber-50';
+                      } else {
+                        status = 'Unpaid';
+                        statusColor = 'text-rose-600 bg-rose-50';
+                      }
+                    }
+
                     return (
-                      <tr key={resident.id}>
+                      <tr key={resident.id} className="hover:bg-zinc-50/50 transition-all group">
                         <td className="py-4">
                           <p className="font-bold text-zinc-900">{resident.fullName}</p>
                           <p className="text-[10px] text-zinc-400 font-bold">{resident.mobile}</p>
@@ -2269,7 +2345,7 @@ const Reports = () => {
                             />
                           ) : (
                             <div className="flex items-center gap-2 group">
-                              {resident.createdAt ? new Date(resident.createdAt).toLocaleDateString('en-IN') : 'N/A'}
+                              {resident.createdAt ? new Date(resident.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}
                               <button 
                                 onClick={() => {
                                   setEditingResidentId(resident.id);
@@ -2284,6 +2360,11 @@ const Reports = () => {
                         </td>
                         <td className="py-4 text-zinc-600 font-medium">₹{(resident.monthlyRent || 0).toLocaleString()}</td>
                         <td className="py-4 text-emerald-600 font-medium">₹{paid.toLocaleString()}</td>
+                        <td className="py-4">
+                          <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider ${statusColor}`}>
+                            {status}
+                          </span>
+                        </td>
                         <td className="py-4 font-black text-rose-600">₹{due.toLocaleString()}</td>
                         <td className="py-4 text-zinc-600 font-medium">
                           {editingResidentId === resident.id && editingField === 'due' ? (
@@ -2853,7 +2934,7 @@ const Accounting = () => {
                 </div>
                 <div className="flex items-center justify-between sm:justify-end gap-6">
                   <div className="text-left sm:text-right">
-                    <p className="font-bold text-zinc-900">₹{tx.amount.toLocaleString()}</p>
+                    <p className="font-bold text-zinc-900">₹{(tx.totalAmount || tx.amount).toLocaleString()}</p>
                     <p className="text-emerald-500 text-xs font-bold capitalize">Paid via {tx.method}</p>
                   </div>
                   <button onClick={() => setShowReceipt(tx)} className="p-2 hover:bg-zinc-100 rounded-lg transition-all text-zinc-400 hover:text-zinc-900">
