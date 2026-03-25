@@ -86,7 +86,6 @@ interface Resident {
   status: 'in' | 'out' | 'leave';
   photoUrl?: string;
   documentUrl?: string;
-  idCardCollected?: boolean;
   qrCode?: string;
   monthlyRent?: number;
   nextDueDate?: string;
@@ -1133,7 +1132,6 @@ const ResidentList = () => {
       email: formData.get('email') as string,
       occupation: formData.get('occupation') as string,
       monthlyRent: Number(formData.get('monthlyRent')),
-      idCardCollected: formData.get('idCardCollected') === 'on'
     };
 
     try {
@@ -1235,16 +1233,6 @@ const ResidentList = () => {
                   <label className="text-sm font-bold text-zinc-500 px-1">Monthly Rent</label>
                   <input name="monthlyRent" type="number" defaultValue={editingResident.monthlyRent} required className="w-full p-4 bg-zinc-50 border border-zinc-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none" />
                 </div>
-                <div className="flex items-center gap-3 py-2">
-                  <input 
-                    name="idCardCollected" 
-                    type="checkbox" 
-                    id="editIdCardCollected"
-                    defaultChecked={editingResident.idCardCollected} 
-                    className="w-5 h-5 rounded border-zinc-300 text-emerald-500 focus:ring-emerald-500"
-                  />
-                  <label htmlFor="editIdCardCollected" className="text-sm font-bold text-zinc-500 cursor-pointer">ID Card Collected</label>
-                </div>
                 <button type="submit" className="w-full py-4 bg-zinc-900 text-white rounded-2xl font-bold hover:bg-zinc-800 transition-all shadow-lg shadow-zinc-900/20">
                   Update Resident
                 </button>
@@ -1333,13 +1321,6 @@ const ResidentList = () => {
                         <div>
                           <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Monthly Rent</p>
                           <p className="font-bold text-emerald-600">₹{(selectedResidentForProfile.monthlyRent || 0).toLocaleString()}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 text-zinc-600">
-                        <div className="w-8 h-8 bg-zinc-50 rounded-lg flex items-center justify-center"><CheckCircle2 size={16} className={selectedResidentForProfile.idCardCollected ? 'text-emerald-500' : 'text-zinc-300'} /></div>
-                        <div>
-                          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">ID Card Collected</p>
-                          <p className="font-bold">{selectedResidentForProfile.idCardCollected ? 'Yes' : 'No'}</p>
                         </div>
                       </div>
                       {selectedResidentForProfile.documentUrl && (
@@ -2239,7 +2220,6 @@ const Reports = () => {
                   <th className="pb-4">Resident</th>
                   <th className="pb-4">Room</th>
                   <th className="pb-4">Joining Date</th>
-                  <th className="pb-4">ID Collected</th>
                   <th className="pb-4">Monthly Rent</th>
                   <th className="pb-4">Total Paid</th>
                   <th className="pb-4">Balance Due</th>
@@ -2300,17 +2280,6 @@ const Reports = () => {
                                 <Edit2 size={12} />
                               </button>
                             </div>
-                          )}
-                        </td>
-                        <td className="py-4">
-                          {resident.idCardCollected ? (
-                            <span className="flex items-center gap-1 text-emerald-600 text-xs font-bold">
-                              <CheckCircle2 size={14} /> Yes
-                            </span>
-                          ) : (
-                            <span className="flex items-center gap-1 text-rose-600 text-xs font-bold">
-                              <XCircle size={14} /> No
-                            </span>
                           )}
                         </td>
                         <td className="py-4 text-zinc-600 font-medium">₹{(resident.monthlyRent || 0).toLocaleString()}</td>
@@ -3024,7 +2993,7 @@ const AddResident = () => {
     occupation: 'Student', idNumber: '', documentType: 'Aadhar Card', bloodGroup: 'O+', allergy: '',
     fatherName: '', fatherPhone: '', motherName: '', motherPhone: '', emergencyNumber: '',
     companyName: '', companyAddress: '', fatherOccupation: '', motherOccupation: '', homeAddress: '',
-    hostelId: '', blockId: '', roomId: '', bedId: '', monthlyRent: '8500', idCardCollected: false,
+    hostelId: '', blockId: '', roomId: '', bedId: '', monthlyRent: '8500',
     photo: null as File | null,
     document: null as File | null
   });
@@ -3195,16 +3164,6 @@ const AddResident = () => {
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-zinc-700">Monthly Rent (₹)</label>
                   <input type="number" value={formData.monthlyRent} onChange={(e) => updateField('monthlyRent', e.target.value)} className="w-full p-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="8500" />
-                </div>
-                <div className="flex items-center gap-3 pt-8">
-                  <input 
-                    type="checkbox" 
-                    id="idCardCollected"
-                    checked={formData.idCardCollected} 
-                    onChange={(e) => setFormData(prev => ({ ...prev, idCardCollected: e.target.checked }))}
-                    className="w-5 h-5 rounded border-zinc-300 text-emerald-500 focus:ring-emerald-500"
-                  />
-                  <label htmlFor="idCardCollected" className="text-sm font-semibold text-zinc-700 cursor-pointer">ID Card Collected</label>
                 </div>
               </div>
 
