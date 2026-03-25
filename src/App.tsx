@@ -89,6 +89,7 @@ interface Resident {
   idCardCollected?: boolean;
   qrCode?: string;
   monthlyRent?: number;
+  nextDueDate?: string;
   createdAt?: any;
 }
 
@@ -1744,6 +1745,42 @@ const Reports = () => {
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [selectedRoomId, setSelectedRoomId] = useState<string>('all');
+  const [editingResidentId, setEditingResidentId] = useState<string | null>(null);
+  const [editingField, setEditingField] = useState<'joining' | 'due' | null>(null);
+
+  const handleUpdateDate = async (residentId: string, field: 'joining' | 'due', value: string) => {
+    try {
+      if (!value) {
+        setEditingResidentId(null);
+        setEditingField(null);
+        return;
+      }
+      
+      const updateData: any = {};
+      if (field === 'joining') {
+        updateData.createdAt = new Date(value).toISOString();
+      } else {
+        updateData.nextDueDate = new Date(value).toISOString();
+      }
+
+      const { error } = await supabase
+        .from('residents')
+        .update(updateData)
+        .eq('id', residentId);
+
+      if (error) throw error;
+      
+      setEditingResidentId(null);
+      setEditingField(null);
+      
+      // Refresh data
+      const { data: residentData } = await supabase.from('residents').select('*');
+      if (residentData) setResidents(residentData as Resident[]);
+    } catch (error) {
+      console.error('Update Error:', error);
+      alert('Failed to update date. Please try again.');
+    }
+  };
 
   useEffect(() => {
     const initialTab = searchParams.get('tab') as any;
@@ -1801,6 +1838,9 @@ const Reports = () => {
   };
 
   const calculateNextDueDate = (resident: Resident) => {
+    if (resident.nextDueDate) {
+      return new Date(resident.nextDueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+    }
     const joiningDate = new Date(resident.createdAt as string);
     const totalPaid = transactions
       .filter(tx => tx.residentId === resident.id && tx.type === 'rent')
@@ -2238,7 +2278,30 @@ const Reports = () => {
                           <p className="text-[10px] text-zinc-400 font-bold">{resident.mobile}</p>
                         </td>
                         <td className="py-4 text-zinc-600 font-medium">{roomNumber}</td>
-                        <td className="py-4 text-zinc-600 font-medium">{resident.createdAt ? new Date(resident.createdAt).toLocaleDateString('en-IN') : 'N/A'}</td>
+                        <td className="py-4 text-zinc-600 font-medium">
+                          {editingResidentId === resident.id && editingField === 'joining' ? (
+                            <input 
+                              type="date" 
+                              className="p-1 border rounded text-xs"
+                              defaultValue={resident.createdAt ? new Date(resident.createdAt).toISOString().split('T')[0] : ''}
+                              onBlur={(e) => handleUpdateDate(resident.id, 'joining', e.target.value)}
+                              autoFocus
+                            />
+                          ) : (
+                            <div className="flex items-center gap-2 group">
+                              {resident.createdAt ? new Date(resident.createdAt).toLocaleDateString('en-IN') : 'N/A'}
+                              <button 
+                                onClick={() => {
+                                  setEditingResidentId(resident.id);
+                                  setEditingField('joining');
+                                }}
+                                className="opacity-0 group-hover:opacity-100 p-1 text-zinc-400 hover:text-zinc-900 transition-all"
+                              >
+                                <Edit2 size={12} />
+                              </button>
+                            </div>
+                          )}
+                        </td>
                         <td className="py-4">
                           {resident.idCardCollected ? (
                             <span className="flex items-center gap-1 text-emerald-600 text-xs font-bold">
@@ -2253,7 +2316,31 @@ const Reports = () => {
                         <td className="py-4 text-zinc-600 font-medium">₹{(resident.monthlyRent || 0).toLocaleString()}</td>
                         <td className="py-4 text-emerald-600 font-medium">₹{paid.toLocaleString()}</td>
                         <td className="py-4 font-black text-rose-600">₹{due.toLocaleString()}</td>
-                        <td className="py-4 text-zinc-600 font-medium">{calculateNextDueDate(resident)}</td>
+                        <td className="py-4 text-zinc-600 font-medium">
+                          {editingResidentId === resident.id && editingField === 'due' ? (
+                            <input 
+                              type="date" 
+                              className="p-1 border rounded text-xs"
+                              defaultValue={resident.nextDueDate ? new Date(resident.nextDueDate).toISOString().split('T')[0] : 
+                                (resident.createdAt ? new Date(new Date(resident.createdAt).setMonth(new Date(resident.createdAt).getMonth() + 1)).toISOString().split('T')[0] : '')}
+                              onBlur={(e) => handleUpdateDate(resident.id, 'due', e.target.value)}
+                              autoFocus
+                            />
+                          ) : (
+                            <div className="flex items-center gap-2 group">
+                              {calculateNextDueDate(resident)}
+                              <button 
+                                onClick={() => {
+                                  setEditingResidentId(resident.id);
+                                  setEditingField('due');
+                                }}
+                                className="opacity-0 group-hover:opacity-100 p-1 text-zinc-400 hover:text-zinc-900 transition-all"
+                              >
+                                <Edit2 size={12} />
+                              </button>
+                            </div>
+                          )}
+                        </td>
                         <td className="py-4 text-right">
                           <button 
                             onClick={() => shareDueReminderOnWhatsApp(resident, due, roomNumber)}
