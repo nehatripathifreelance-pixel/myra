@@ -54,6 +54,22 @@ import { supabase } from './supabase';
 import * as XLSX from 'xlsx';
 import { QRCodeSVG } from 'qrcode.react';
 
+// --- Helpers ---
+const formatDateForInput = (dateStr: string | null | undefined) => {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  return d.toISOString().split('T')[0];
+};
+
+const getNextMonthDateForInput = (dateStr: string | null | undefined) => {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  d.setMonth(d.getMonth() + 1);
+  return d.toISOString().split('T')[0];
+};
+
 // --- Types ---
 interface Resident {
   id: string;
@@ -1187,6 +1203,8 @@ const ResidentList = () => {
       .reduce((acc, curr) => acc + (curr.totalAmount || curr.amount || 0), 0);
     
     const joiningDate = new Date(resident.createdAt as string);
+    if (isNaN(joiningDate.getTime())) return 0;
+    
     const currentDate = new Date();
     
     const monthsElapsed = (currentDate.getFullYear() - joiningDate.getFullYear()) * 12 + (currentDate.getMonth() - joiningDate.getMonth()) + 1;
@@ -1759,10 +1777,17 @@ const Reports = () => {
       }
       
       const updateData: any = {};
+      const d = new Date(value);
+      if (isNaN(d.getTime())) {
+        setEditingResidentId(null);
+        setEditingField(null);
+        return;
+      }
+
       if (field === 'joining') {
-        updateData.createdAt = new Date(value).toISOString();
+        updateData.createdAt = d.toISOString();
       } else {
-        updateData.nextDueDate = new Date(value).toISOString();
+        updateData.nextDueDate = d.toISOString();
       }
 
       const { error } = await supabase
@@ -1831,6 +1856,8 @@ const Reports = () => {
     
     // Improved logic: Calculate months since joining
     const joiningDate = new Date(resident.createdAt as string);
+    if (isNaN(joiningDate.getTime())) return 0;
+    
     const currentDate = new Date();
     
     const monthsElapsed = (currentDate.getFullYear() - joiningDate.getFullYear()) * 12 + (currentDate.getMonth() - joiningDate.getMonth()) + 1;
@@ -1841,9 +1868,13 @@ const Reports = () => {
 
   const calculateNextDueDate = (resident: Resident) => {
     if (resident.nextDueDate) {
-      return new Date(resident.nextDueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+      const d = new Date(resident.nextDueDate);
+      if (!isNaN(d.getTime())) return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
     }
+    if (!resident.createdAt) return 'N/A';
     const joiningDate = new Date(resident.createdAt as string);
+    if (isNaN(joiningDate.getTime())) return 'N/A';
+
     const totalPaid = transactions
       .filter(tx => tx.residentId === resident.id && tx.type === 'rent')
       .reduce((acc, curr) => acc + (curr.totalAmount || curr.amount || 0), 0);
@@ -2339,7 +2370,7 @@ const Reports = () => {
                             <input 
                               type="date" 
                               className="p-1 border rounded text-xs"
-                              defaultValue={resident.createdAt ? new Date(resident.createdAt).toISOString().split('T')[0] : ''}
+                              defaultValue={formatDateForInput(resident.createdAt)}
                               onBlur={(e) => handleUpdateDate(resident.id, 'joining', e.target.value)}
                               autoFocus
                             />
@@ -2371,8 +2402,7 @@ const Reports = () => {
                             <input 
                               type="date" 
                               className="p-1 border rounded text-xs"
-                              defaultValue={resident.nextDueDate ? new Date(resident.nextDueDate).toISOString().split('T')[0] : 
-                                (resident.createdAt ? new Date(new Date(resident.createdAt).setMonth(new Date(resident.createdAt).getMonth() + 1)).toISOString().split('T')[0] : '')}
+                              defaultValue={resident.nextDueDate ? formatDateForInput(resident.nextDueDate) : getNextMonthDateForInput(resident.createdAt)}
                               onBlur={(e) => handleUpdateDate(resident.id, 'due', e.target.value)}
                               autoFocus
                             />
@@ -2782,7 +2812,12 @@ const Accounting = () => {
   const totalCollected = transactions.reduce((acc, curr) => acc + (curr.totalAmount || curr.amount || 0), 0);
 
   const Receipt = ({ tx, resident, onClose }: { tx: Transaction, resident?: Resident, onClose: () => void }) => {
-    const taxDetails = tx.taxDetails ? JSON.parse(tx.taxDetails) : [];
+    let taxDetails = [];
+    try {
+      taxDetails = tx.taxDetails ? JSON.parse(tx.taxDetails) : [];
+    } catch (e) {
+      console.error('Error parsing tax details:', e);
+    }
     
     return (
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[110] flex items-center justify-center p-6">
@@ -3420,7 +3455,7 @@ const AddResident = () => {
             disabled={submitting}
             className="px-8 py-3 bg-emerald-500 text-zinc-900 rounded-xl font-bold hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50"
           >
-            {submitting ? 'Saving...' : step === 3 ? 'Complete Admission' : 'Next Step'}
+            {submitting ? 'Uploading & Saving...' : step === 3 ? 'Complete Admission' : 'Next Step'}
           </button>
         </div>
       </div>
